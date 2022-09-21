@@ -1,0 +1,114 @@
+{
+  "name": "ui",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@emotion/react": "^11.5.0",
+    "@emotion/styled": "^11.3.0",
+    "@mui/material": "^5.2.8",
+    "@openapitools/openapi-generator-cli": "^2.4.26",
+    "@types/jest": "^27.0.2",
+    "@types/lodash-es": "^4.17.6",
+    "@types/node": "^16.11.6",
+    "@types/react": "^17.0.33",
+    "@types/react-dom": "^17.0.10",
+    "@types/react-router-dom": "^5.3.2",
+    "@types/uuid": "^8.3.1",
+    "@uiw/react-md-editor": "^3.6.5",
+    "material-ui-popup-state": "^4.0.2",
+    "mui-rff": "^5.0.0",
+    "notistack": "^2.0.3",
+    "react": "^17.0.2",
+    "react-async": "^10.0.1",
+    "react-dom": "^17.0.2",
+    "react-error-boundary": "^3.1.4",
+    "react-final-form-arrays": "^3.1.3",
+    "react-flatten-children": "^1.1.2",
+    "react-google-button": "^0.7.2",
+    "react-google-login": "^5.2.2",
+    "react-router-dom": "^5.3.0",
+    "rehype-sanitize": "^5.0.1",
+    "swr": "^1.2.0",
+    "typescript": "^4.4.4",
+    "use-local-storage-state": "^11.0.0",
+    "web-vitals": "^2.1.2",
+    "yup": "^1.0.0-beta.1"
+  },
+  "scripts": {
+    "apifake": "nodemon ./src/testing/server/index.ts",
+    "start": "react-scripts start",
+    "start:fake": "REACT_APP_API_ENVIRONMENT=localhost REACT_APP_CLOUD_ENVIRONMENT=fake concurrently 'npm:apifake' 'npm:start'",
+    "build": "REACT_APP_MSW_ON=0 react-scripts build",
+    "test": "react-scripts test",
+    "cy:run": "cypress run --e2e",
+    "cy:dev": "cypress open --e2e",
+    "test:e2e": "CYPRESS_USE_FAKE=1 start-server-and-test 'BROWSER=none npm run start:fake' '3000|3002' cy:run",
+    "test:e2e:dev": "CYPRESS_USE_FAKE=1 start-server-and-test 'BROWSER=none npm run start:fake' '3000|3002' cy:dev",
+    "clean-test-account": "ts-node ./scripts/cleanTestAccount.ts",
+    "format": "prettier --write .",
+    "format:ci": "prettier --check .",
+    "lint": "eslint ./src --max-warnings=0",
+    "prepare": "rm -rf src/generated && npm run generate-wsm && npm run generate-sam && npm run generate-ecm",
+    "generate-wsm": "openapi-generator-cli generate -g typescript-fetch -o src/generated/workspacemanager -i https://github.com/DataBiosphere/terra-workspace-manager/releases/download/0.254.386/service_openapi.yaml -p typescriptThreePlus=true",
+    "generate-sam": "openapi-generator-cli generate -g typescript-fetch -o src/generated/sam -i https://github.com/broadinstitute/sam/raw/develop/src/main/resources/swagger/api-docs.yaml -p typescriptThreePlus=true",
+    "generate-ecm": "openapi-generator-cli generate -g typescript-fetch -o src/generated/ecm -i https://github.com/DataBiosphere/terra-external-credentials-manager/raw/dev/common/openapi.yml -p typescriptThreePlus=true",
+    "check-licenses": "license-checker --production --excludePackages=\"ui@0.1.0\" --onlyAllow \"MIT;CC0-1.0;Apache-2.0;BSD-3-Clause;ISC;BSD-2-Clause;Python-2.0;MPL-2.0;CC-BY-4.0;Unlicense;0BSD\""
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@google-cloud/secret-manager": "^3.11.0",
+    "@testing-library/cypress": "^8.0.3",
+    "@testing-library/jest-dom": "^5.15.0",
+    "@testing-library/react": "^12.1.2",
+    "@testing-library/react-hooks": "^7.0.2",
+    "@testing-library/user-event": "^13.5.0",
+    "@types/cors": "^2.8.12",
+    "@types/express": "^4.17.13",
+    "@types/morgan": "^1.9.3",
+    "@types/node-fetch": "^2.6.2",
+    "concurrently": "^7.2.2",
+    "cors": "^2.8.5",
+    "cypress": "^10.0.3",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-jest-dom": "^3.9.2",
+    "eslint-plugin-prettier": "^4.0.0",
+    "eslint-plugin-react-hooks": "^4.2.0",
+    "eslint-plugin-testing-library": "^5.0.0",
+    "express": "^4.18.1",
+    "google-auth-library": "^7.14.0",
+    "http-status-codes": "^2.1.4",
+    "morgan": "^1.10.0",
+    "msw": "^0.42.1",
+    "node-fetch": "^2.6.7",
+    "nodemon": "^2.0.18",
+    "prettier": "2.4.1",
+    "prettier-plugin-organize-imports": "^2.3.4",
+    "raw.macro": "^0.6.2",
+    "react-scripts": "5.0.0",
+    "start-server-and-test": "^1.14.0",
+    "ts-node": "^10.8.1"
+  },
+  "jest": {
+    "transformIgnorePatterns": []
+  },
+  "msw": {
+    "workerDirectory": "public"
+  }
+}
