@@ -1,0 +1,13 @@
+{
+  "rules": {
+    // Disable testing-library rules that don't apply to Cypress.
+    "testing-library/await-async-query": "off",
+    "testing-library/prefer-screen-queries": "off",
+    "testing-library/prefer-explicit-assert": "off",
+
+    // Disable Jest rules.
+    "jest/valid-expect": "off",
+    "jest/valid-expect-in-promise": "off",
+    "jest/no-conditional-expect": "off"
+  }
+}

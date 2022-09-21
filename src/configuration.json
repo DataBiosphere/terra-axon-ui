@@ -1,0 +1,9 @@
+{
+  "backendUris": {
+    "*": "http://localhost:3002"
+  },
+  "testing": {
+    "serviceAccountKey": "/path/to/secret/in/google/cloud/secret/manager",
+    "serviceAccount": "test@example.com"
+  }
+}
