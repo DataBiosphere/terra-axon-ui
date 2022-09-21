@@ -30,6 +30,10 @@ const useGoogleLoginOrFake = window.Cypress
   ? () => ({ signIn: nop, loaded: true })
   : useGoogleLogin;
 
+const useGoogleLogoutOrFake = window.Cypress
+  ? () => ({ signOut: nop })
+  : useGoogleLogout;
+
 export type BasicProfile = ReturnType<GoogleLoginResponse["getBasicProfile"]>;
 export type AuthResponse = ReturnType<GoogleLoginResponse["getAuthResponse"]>;
 
@@ -151,7 +155,7 @@ export function AuthProvider(props: AuthProviderProps): ReactElement {
     setError(undefined);
     setReloadAuthFunc(undefined);
   }, [setAuthResponse, setProfile]);
-  const { signOut } = useGoogleLogout({
+  const { signOut } = useGoogleLogoutOrFake({
     clientId: clientId || "",
     onLogoutSuccess: onSignedOut,
     onFailure: onSignedOut,
