@@ -17,6 +17,7 @@ import {
   GcpAiNotebookInstanceAttributes,
   GcpAiNotebookInstanceResource,
   GcpBigQueryDatasetAttributes,
+  GcpBigQueryDatasetResource,
   GcpGcsBucketAttributes,
   GcpGcsBucketResource,
   GcsBucketCloudName,
@@ -27,6 +28,7 @@ import {
   ResourceType,
   StewardshipType,
   UpdateAiNotebookInstanceRequest,
+  UpdateBigQueryDatasetRequest,
   UpdateGcsBucketRequest,
 } from "../../../generated/workspacemanager";
 import { CloudNotebooksClient } from "../../../lib/cloud/notebooks";
@@ -123,8 +125,13 @@ export class FakeControlledGcpResourceApi extends ControlledGcpResourceApi {
     const projectId = this.workspaceApi.getWorkspaceProjectId(
       request.workspaceId
     );
+    const bucketPart =
+      request.generateGcpGcsBucketCloudNameRequestBody.gcsBucketName.replace(
+        /_/g,
+        "-"
+      );
     return Promise.resolve({
-      generatedBucketCloudName: `${request.generateGcpGcsBucketCloudNameRequestBody.gcsBucketName}-${projectId}`,
+      generatedBucketCloudName: `${bucketPart}-${projectId}`,
     });
   }
 
@@ -169,6 +176,37 @@ export class FakeControlledGcpResourceApi extends ControlledGcpResourceApi {
         attributes: resource.resourceAttributes
           ?.gcpBqDataset as GcpBigQueryDatasetAttributes,
       },
+    });
+  }
+
+  async updateBigQueryDataset(
+    request: UpdateBigQueryDatasetRequest
+  ): Promise<GcpBigQueryDatasetResource> {
+    const originalResource = this.resourceApi.getResource(
+      request.resourceId,
+      request.workspaceId
+    );
+
+    const resource = this.resourceApi.updateResource(
+      request.resourceId,
+      request.workspaceId,
+      {
+        metadata: {
+          ...originalResource.metadata,
+          name:
+            request.updateControlledGcpBigQueryDatasetRequestBody.name ||
+            originalResource.metadata.name,
+          description:
+            request.updateControlledGcpBigQueryDatasetRequestBody.description ||
+            originalResource.metadata.description,
+        },
+        resourceAttributes: { ...originalResource.resourceAttributes },
+      }
+    );
+    return Promise.resolve({
+      metadata: resource.metadata,
+      attributes: resource.resourceAttributes
+        ?.gcpBqDataset as GcpBigQueryDatasetAttributes,
     });
   }
 

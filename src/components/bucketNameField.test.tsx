@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { TextField } from "mui-rff";
+import { Form } from "react-final-form";
 import * as Yup from "yup";
+import { StewardshipType } from "../generated/workspacemanager";
 import { apiFakes } from "../testing/api/fakes";
 import { createTestWorkspace } from "../testing/api/helper";
 import { FakeApiProvider } from "../testing/api/provider";
@@ -9,20 +11,63 @@ import {
   autoBucketNameField,
   AutoBucketNameTextField,
   bucketNameField,
+  BucketNameTextField,
 } from "./bucketNameField";
 import { resourceNameField, validateFields } from "./fieldValidation";
+import nop from "./nop";
 
-describe("bucket name field validation", () => {
-  describe("optional", () => {
-    const schema = Yup.object({ bucketName: bucketNameField(false) });
+describe("bucket name field", () => {
+  describe("renders", () => {
+    it("controlled", () => {
+      render(
+        <Form
+          onSubmit={nop}
+          render={() => (
+            <BucketNameTextField stewardship={StewardshipType.Controlled} />
+          )}
+        />
+      );
+      screen.getByText("Only use lowercase letters, numbers and dashes");
+    });
 
-    it("allows empty", () => {
-      expect(validateFields(schema, {})).toEqual({});
+    it("referenced", () => {
+      render(
+        <Form
+          onSubmit={nop}
+          render={() => (
+            <BucketNameTextField stewardship={StewardshipType.Referenced} />
+          )}
+        />
+      );
+      screen.getByText(
+        "Only use lowercase letters, numbers, underscores and dashes"
+      );
+    });
+
+    it("disabled", () => {
+      render(
+        <Form
+          onSubmit={nop}
+          render={() => (
+            <BucketNameTextField
+              disabled
+              stewardship={StewardshipType.Referenced}
+            />
+          )}
+        />
+      );
+      expect(
+        screen.queryByText(
+          "Only use lowercase letters, numbers, underscores and dashes"
+        )
+      ).not.toBeInTheDocument();
     });
   });
 
-  describe("required", () => {
-    const schema = Yup.object({ bucketName: bucketNameField(true) });
+  describe("validation", () => {
+    const schema = Yup.object({
+      bucketName: bucketNameField(StewardshipType.Referenced),
+    });
 
     it("is successful", () => {
       expect(

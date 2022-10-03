@@ -11,9 +11,10 @@ import {
 } from "../generated/workspacemanager";
 import { useResourceUpdated } from "./api/resourceList";
 import { useApi } from "./apiProvider";
-import { bucketNameField, BucketNameTextField } from "./bucketNameField";
+import { datasetNameField, DatasetNameTextField } from "./datasetNameField";
 import { ErrorList } from "./errorhandler";
 import {
+  projectIdField,
   resourceNameField,
   resourceNameHelperText,
   toFinalFormError,
@@ -30,34 +31,35 @@ import { LoadingBackdrop } from "./loadingBackdrop";
 const schema = Yup.object({
   name: resourceNameField(),
   description: Yup.string(),
-  bucketName: bucketNameField(StewardshipType.Referenced),
+  datasetName: datasetNameField(true),
+  projectId: projectIdField(),
 });
 type Fields = Yup.InferType<typeof schema>;
 
-export function useEditGcsBucketState(resource: ResourceDescription) {
+export function useEditDatasetState(resource: ResourceDescription) {
   return usePopupState({
     variant: "dialog",
-    popupId: `edit-bucket-${resource.metadata.resourceId}`,
+    popupId: `edit-dataset-${resource.metadata.resourceId}`,
   });
 }
 
-export interface EditGcsBucketProps extends Omit<FlyoverProps, "children"> {
+export interface EditDatasetProps extends Omit<FlyoverProps, "children"> {
   workspace: WorkspaceDescription;
   resource: ResourceDescription;
 }
 
-export function EditGcsBucket({
+export function EditDataset({
   workspace,
   resource,
   ...flyoverProps
-}: EditGcsBucketProps) {
-  const editGcsBucketAction = useEditGcsBucketAction(workspace, resource);
+}: EditDatasetProps) {
+  const editDatasetAction = useEditDatasetAction(workspace, resource);
 
   return (
-    <Flyover title="Edit the cloud storage bucket" {...flyoverProps}>
+    <Flyover title="Edit the BigQuery dataset" {...flyoverProps}>
       <Form
         onSubmit={(values: Fields) =>
-          editGcsBucketAction(values).then(
+          editDatasetAction(values).then(
             () => flyoverProps.onClose(),
             toFinalFormError
           )
@@ -65,8 +67,9 @@ export function EditGcsBucket({
         initialValues={{
           name: resource.metadata.name || "",
           description: resource.metadata.description || "",
-          bucketName:
-            resource.resourceAttributes.gcpGcsBucket?.bucketName || "",
+          datasetName:
+            resource.resourceAttributes.gcpBqDataset?.datasetId || "",
+          projectId: resource.resourceAttributes.gcpBqDataset?.projectId || "",
         }}
         validate={(values: Fields) => validateFields(schema, values)}
         render={({
@@ -93,8 +96,19 @@ export function EditGcsBucket({
                 name="description"
                 label="Description"
               />
-              <BucketNameTextField
-                stewardship={StewardshipType.Referenced}
+              <DatasetNameTextField
+                required
+                disabled={
+                  resource.metadata.stewardshipType ==
+                  StewardshipType.Controlled
+                }
+              />
+              <TextField
+                required
+                fullWidth
+                margin="dense"
+                label="Project ID"
+                name="projectId"
                 disabled={
                   resource.metadata.stewardshipType ==
                   StewardshipType.Controlled
@@ -118,7 +132,7 @@ export function EditGcsBucket({
   );
 }
 
-function useEditGcsBucketAction(
+function useEditDatasetAction(
   workspace: WorkspaceDescription,
   resource: ResourceDescription
 ) {
@@ -128,10 +142,10 @@ function useEditGcsBucketAction(
     async (fields: Fields) =>
       resource.metadata.stewardshipType == StewardshipType.Controlled
         ? controlledGcpResourceApi
-            .updateGcsBucket({
+            .updateBigQueryDataset({
               workspaceId: workspace.id,
               resourceId: resource.metadata.resourceId,
-              updateControlledGcpGcsBucketRequestBody: {
+              updateControlledGcpBigQueryDatasetRequestBody: {
                 name: fields.name,
                 description: fields.description,
               },
@@ -139,22 +153,23 @@ function useEditGcsBucketAction(
             .then((b) =>
               resourceUpdated({
                 metadata: b.metadata,
-                resourceAttributes: { gcpGcsBucket: b.attributes },
+                resourceAttributes: { gcpBqDataset: b.attributes },
               })
             )
         : referencedGcpResourceApi
-            .updateBucketReferenceResource({
+            .updateBigQueryDatasetReferenceResource({
               workspaceId: workspace.id,
               resourceId: resource.metadata.resourceId,
-              updateGcsBucketReferenceRequestBody: {
+              updateBigQueryDatasetReferenceRequestBody: {
                 name: fields.name,
                 description: fields.description,
-                bucketName: fields.bucketName,
+                datasetId: fields.datasetName,
+                projectId: fields.projectId,
               },
             })
             .then(() =>
               // TODO: Use response rather than fetching manually [PF-1987]
-              referencedGcpResourceApi.getBucketReference({
+              referencedGcpResourceApi.getBigQueryDatasetReference({
                 resourceId: resource.metadata.resourceId,
                 workspaceId: workspace.id,
               })
@@ -162,7 +177,7 @@ function useEditGcsBucketAction(
             .then((b) =>
               resourceUpdated({
                 metadata: b.metadata,
-                resourceAttributes: { gcpGcsBucket: b.attributes },
+                resourceAttributes: { gcpBqDataset: b.attributes },
               })
             ),
     [

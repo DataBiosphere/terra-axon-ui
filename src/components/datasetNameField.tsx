@@ -70,6 +70,7 @@ export function AutoDatasetNameTextField({
       field="datasetName"
       generateId={generateId}
       Component={DatasetNameTextField}
+      componentProps={{}}
       {...props}
     />
   );

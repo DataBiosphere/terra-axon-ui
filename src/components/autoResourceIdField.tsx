@@ -1,20 +1,24 @@
 import { Icon, IconButton, InputAdornment } from "@mui/material";
-import { TextField } from "mui-rff";
-import { useCallback, useState } from "react";
+import { TextFieldProps } from "mui-rff";
+import { ComponentType, useCallback, useState } from "react";
 import { useAsync } from "react-async";
 import { useField, useForm, useFormState } from "react-final-form";
 
-export interface AutoResourceIdFieldProps {
+type RequiredProps = Pick<TextFieldProps, "InputProps" | "fieldProps" | "name">;
+
+export interface AutoResourceIdFieldProps<T> {
   field: string;
   generateId: (name: string) => Promise<string>;
-  Component: typeof TextField;
+  Component: ComponentType<RequiredProps & T>;
+  componentProps: Exclude<T, RequiredProps>;
 }
 
-export function AutoResourceIdField({
+export function AutoResourceIdField<T>({
   field,
   generateId,
   Component,
-}: AutoResourceIdFieldProps) {
+  componentProps,
+}: AutoResourceIdFieldProps<T>) {
   const [name, setName] = useState("");
   useFormState({
     onChange: (state: { values: { name: string | undefined } }) =>
@@ -53,6 +57,7 @@ export function AutoResourceIdField({
         initialValue: autoId,
       }}
       name={field}
+      {...componentProps}
     />
   );
 }

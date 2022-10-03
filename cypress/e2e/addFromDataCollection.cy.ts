@@ -51,6 +51,7 @@ describe("add from data collection", () => {
           cy.findAllByRole("row").filter(`:contains("${name}")`).should("exist")
         );
 
+        cy.findByText("Add to an existing folder").click();
         cy.findByRole("button", { name: "Add to your workspace" }).click();
         cy.findByRole("button", { name: "Add to your workspace" }).should(
           "not.exist"
@@ -65,7 +66,42 @@ describe("add from data collection", () => {
       });
     });
   });
+
+  it("displays failure", () => {
+    createDataCollection().then((dataCollection) =>
+      cy.createWorkspace().then((workspace) =>
+        createFolder(workspace.id, "existing name").then(() => {
+          cy.visit("/workspaces/" + workspace.userFacingId);
+
+          cy.findByRole("tab", { name: "Resources" }).click();
+          cy.findByRole("button", { name: "Add" }).click();
+          cy.findByRole("menuitem", { name: "Data from the catalog" }).click();
+          cy.findByText(dataCollection.displayName || "").click();
+          cy.findByRole("button", { name: "Next" }).click();
+          cy.findAllByRole("row")
+            .filter(`:contains("${testBucketName}")`)
+            .within(() => cy.findByRole("checkbox").click());
+          cy.findByRole("button", { name: "Next" }).click();
+          cy.findByText("Create a new folder").click();
+          cy.findByRole("textbox", { name: "Folder name" })
+            .clear()
+            .type("existing name");
+          cy.findByRole("button", { name: "Add to your workspace" }).click();
+          cy.findByRole("alert").contains("already exists");
+        })
+      )
+    );
+  });
 });
+
+function createFolder(workspaceId: string, displayName: string) {
+  return cy.apis().then(({ folderApi }) =>
+    folderApi.createFolder({
+      workspaceId: workspaceId,
+      createFolderRequestBody: { displayName: displayName },
+    })
+  );
+}
 
 function createDataCollection() {
   return cy.apis().then(({ workspaceApi, referencedGcpResourceApi }) => {

@@ -4,9 +4,15 @@ import {
   AccessScope,
   ResourceDescription,
   StewardshipType,
+  WorkspaceDescription,
 } from "../../generated/workspacemanager";
+import { ResourceLineageEntry } from "../../generated/workspacemanager/models/ResourceLineageEntry";
 import { useApi } from "../apiProvider";
 import { useAuth } from "../auth";
+
+export enum ResourcePropertyNames {
+  FolderId = "terra-folder-id",
+}
 
 export function useIsAccessibleResource() {
   const { profile } = useAuth();
@@ -68,6 +74,37 @@ export function useResourceUpdated() {
   );
 }
 
+export type ResourceLineageType =
+  | WorkspaceDescription
+  | ResourceDescription
+  | "unknown";
+
+// Return the lineage of a resource, excluding the resource itself and the current workspace
+export function useResourceGetLineage(
+  workspaceId: string,
+  resourceId: string,
+  resourceLineage: ResourceLineageEntry[],
+  config?: SWRConfiguration
+) {
+  const { workspaceApi } = useApi();
+  return useSWR<ResourceLineageType[]>(
+    lineageKey(workspaceId, resourceId),
+    () =>
+      Promise.all(
+        resourceLineage.map(({ sourceWorkspaceId }) =>
+          workspaceApi
+            .getWorkspace({
+              workspaceId: sourceWorkspaceId,
+            })
+            .catch(() => {
+              return "unknown" as ResourceLineageType;
+            })
+        )
+      ),
+    config
+  );
+}
+
 export function useResourceAdded() {
   const { mutate } = useSWRConfig();
   return useCallback(
@@ -104,6 +141,10 @@ export function useResourceDeleted() {
 
 function key(workspaceId: string) {
   return ["/api/workspace/resources", workspaceId];
+}
+
+function lineageKey(workspaceId: string, resourceId: string) {
+  return ["/api/workspace/resources/lineage", workspaceId, resourceId];
 }
 
 function workspaceKey(workspaceUserFacingId: string) {

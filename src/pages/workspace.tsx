@@ -2,7 +2,6 @@ import {
   Alert,
   Box,
   Button,
-  CircularProgress,
   Divider,
   Grid,
   Icon,
@@ -14,14 +13,12 @@ import {
   MenuList,
   Paper,
   Stack,
-  Tab,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Tabs,
   Typography,
   useMediaQuery,
   useTheme,
@@ -44,9 +41,18 @@ import {
 import { useParams } from "react-router-dom";
 import { AbsoluteDateTooltip } from "../components/absoluteDateTooltip";
 import { useAddFromDataCollection } from "../components/addFromDataCollection";
+import { useFolderList } from "../components/api/folder";
 import { useJobList } from "../components/api/jobList";
-import { useResourceList } from "../components/api/resourceList";
-import { useWorkspace } from "../components/api/workspace";
+import {
+  ResourceLineageType,
+  useResourceGetLineage,
+  useResourceList,
+} from "../components/api/resourceList";
+import {
+  isDataCollection,
+  useDataCollectionList,
+  useWorkspace,
+} from "../components/api/workspace";
 import { useCloneWorkspace } from "../components/cloneWorkspace";
 import { CopyToClipboardButton } from "../components/copyToClipboardButton";
 import { useCreateBigQueryDatasetReference } from "../components/createBigQueryDatasetReference";
@@ -55,17 +61,29 @@ import { useCreateBucketReference } from "../components/createBucketReference";
 import { useCreateGitRepoReference } from "../components/createGitRepoReference";
 import { useCreateNotebookInstance } from "../components/createNotebookInstance";
 import { useCreateObjectReference } from "../components/createObjectReference";
-import { useDeleteResource } from "../components/deleteResource";
 import {
   DeleteWorkspaceMenuItem,
   useDeleteWorkspace,
 } from "../components/deleteWorkspace";
 import { useDeleteWorkspaceDialog } from "../components/deleteWorkspaceDialog";
+import { DetailsPane } from "../components/detailsPane";
 import { DisabledTooltip } from "../components/disabledTooltip";
+import {
+  EditDatatable,
+  useEditDatatableState,
+} from "../components/editBigQueryDatatable";
+import {
+  EditDataset,
+  useEditDatasetState,
+} from "../components/editBiqQueryDataset";
 import {
   EditGcsBucket,
   useEditGcsBucketState,
 } from "../components/editGcsBucket";
+import {
+  EditGcsObject,
+  useEditGcsObjectState,
+} from "../components/editGcsObject";
 import { EditWorkspaceButton } from "../components/editWorkspace";
 import { EmptyCard } from "../components/emptyCard";
 import { usePageErrorHandler } from "../components/errorhandler";
@@ -76,6 +94,7 @@ import { lastModifiedToString } from "../components/lastModified";
 import { InlineLoading, Loading } from "../components/loading";
 import { LoadingBackdrop } from "../components/loadingBackdrop";
 import { Markdown } from "../components/markdownEditor";
+import { MultilineTypography } from "../components/multilineTypography";
 import { NewResourceButton } from "../components/newResourceButton";
 import { NotebookCard } from "../components/notebookCard";
 import { NoWrapCell } from "../components/noWrapCell";
@@ -98,20 +117,31 @@ import {
   PaperListItemTitle,
 } from "../components/paperList";
 import { PaperTitle } from "../components/paperTitle";
+import { useRecentWorkspacesRecord } from "../components/recentWorkspaces";
 import {
   ResourceIcon,
   resourceTypeToString,
   stewardshipTypeToString,
 } from "../components/resourceIcon";
+import { ResourceMenuButton } from "../components/resourceMenuButton";
 import {
-  ResourceTableControl,
-  ResourceTableSortField,
-} from "../components/resourceTableControl";
+  foldersToNodes,
+  ResourceNode,
+  ResourceNodeRow,
+  resourcesToNodes,
+} from "../components/resourceNodeRow";
+import { ResourceTableSortField } from "../components/resourceTableControl";
 import { SectionHeader } from "../components/sectionHeader";
 import { ShareWorkspaceButton } from "../components/shareWorkspace";
 import { useTitlePrefix } from "../components/title";
+import { useUserIdentity } from "../components/useUserIdentity";
+import {
+  useWorkspaceDataColectionsTablePopupState,
+  WorkspaceDataCollectionsTable,
+} from "../components/workspaceDataCollectionsTable";
 import {
   EnumeratedJob,
+  Folder,
   IamRole,
   JobReportStatusEnum,
   OperationType,
@@ -119,6 +149,7 @@ import {
   ResourceType,
   WorkspaceDescription,
 } from "../generated/workspacemanager";
+import { pluralize } from "../lib/pluralize";
 
 export default function WorkspacePage(): ReactElement {
   const { workspaceUserFacingId } = useParams<{
@@ -135,6 +166,8 @@ export default function WorkspacePage(): ReactElement {
     onError: errorHandler,
   });
 
+  useRecentWorkspacesRecord(workspace?.id);
+
   const { data: jobs } = useJobList(workspace?.id, {
     ...(fastRefresh ? { refreshInterval: 5000 } : {}),
     onError: errorHandler,
@@ -147,19 +180,25 @@ export default function WorkspacePage(): ReactElement {
     onError: errorHandler,
   });
 
+  const { data: folders } = useFolderList(workspace?.id, {
+    ...(fastRefresh ? { refreshInterval: 5000 } : {}),
+    onError: errorHandler,
+  });
+
   const displayName = workspace?.displayName || workspace?.id;
   useTitlePrefix(displayName || "");
 
   const context = useMemo(() => {
-    if (!workspace || !resources || !jobs) return undefined;
+    if (!workspace || !resources || !folders || !jobs) return undefined;
     return {
       workspace: workspace,
       resources: resources,
+      folders: folders,
       jobs: jobs,
       selectedResourceId,
       setSelectedResourceId,
     };
-  }, [jobs, resources, workspace, selectedResourceId]);
+  }, [jobs, resources, folders, workspace, selectedResourceId]);
 
   if (!context) {
     return <Loading />;
@@ -255,6 +294,7 @@ function WorkspacePageLoaded() {
 interface WorkspacePageContextType {
   workspace: WorkspaceDescription;
   resources: ResourceDescription[];
+  folders: Folder[];
   selectedResourceId: string;
   setSelectedResourceId: (id: string) => void;
   jobs: EnumeratedJob[];
@@ -428,7 +468,7 @@ function Detail({ title, value, href, target }: DetailProps) {
 }
 
 function GitReposCard() {
-  const { workspace } = useWorkspacePage();
+  const { workspace, setSelectedResourceId } = useWorkspacePage();
   const gitRepos = useWorkspacePageGitRepos();
 
   const { createGitRepoReference, show } = useCreateGitRepoReference({
@@ -458,7 +498,10 @@ function GitReposCard() {
                 <PaperListItemTitle
                   title={repo.metadata.name}
                   actions={
-                    <ResourceMenuButton workspace={workspace} resource={repo} />
+                    <ResourceMenuButton
+                      resource={repo}
+                      onDelete={() => setSelectedResourceId("")}
+                    />
                   }
                 />
                 <PaperListItemContents>
@@ -565,9 +608,85 @@ function DescriptionCard() {
   );
 }
 
+interface ResourcesCardSubheaderProps {
+  dataCollections: WorkspaceDescription[];
+  resources: ResourceDescription[];
+}
+
+function ResourcesCardSubheader({
+  dataCollections,
+  resources,
+}: ResourcesCardSubheaderProps) {
+  // TODO: This will only find one dc per resource
+  // Adjust if multiple dcs per resource is possible
+  const [dcResources, dcsInWorkspace] = useMemo(() => {
+    const dcMap = dataCollections.reduce((curr, dc) => {
+      curr.set(dc.id, dc);
+      return curr;
+    }, new Map<string, WorkspaceDescription>());
+
+    return resources.reduce(
+      (curr, r) => {
+        const lineage = r.metadata.resourceLineage?.find((l) =>
+          dcMap.get(l.sourceWorkspaceId)
+        );
+        const dc = dcMap.get(lineage?.sourceWorkspaceId || "");
+        if (dc) {
+          curr[0].add(r);
+          curr[1].add(dc);
+        }
+        return curr;
+      },
+      [new Set<ResourceDescription>(), new Set<WorkspaceDescription>()]
+    );
+  }, [resources, dataCollections]);
+
+  const totalCount = resources.length;
+  const dcCount = dcsInWorkspace.size;
+  let subheaderContent = pluralize("resource", totalCount, true);
+  let subheaderLinkContent = null;
+  if (dcCount) {
+    subheaderContent =
+      `${subheaderContent} • ` +
+      `${pluralize("resource", dcResources.size, true)} from `;
+    subheaderLinkContent =
+      `${dcCount ? dcCount + " " : ""}` +
+      `${pluralize("data collection", dcCount, false)}`;
+  }
+
+  const tablePopupState = useWorkspaceDataColectionsTablePopupState();
+  return (
+    <>
+      {subheaderContent}
+      {subheaderLinkContent && (
+        <Link component="button" variant="body1" onClick={tablePopupState.open}>
+          {subheaderLinkContent}
+        </Link>
+      )}
+      <WorkspaceDataCollectionsTable
+        dataCollections={[...dcsInWorkspace]}
+        {...bindFlyover(tablePopupState)}
+      />
+    </>
+  );
+}
+
 function ResourcesCard() {
-  const { workspace, jobs, selectedResourceId } = useWorkspacePage();
+  const { workspace, folders, jobs, selectedResourceId } = useWorkspacePage();
   const resources = useWorkspacePageResources();
+
+  const errorHandler = usePageErrorHandler();
+  const { data: dataCollections } = useDataCollectionList({
+    onError: errorHandler,
+  });
+
+  const selectedResourceNode = useMemo(
+    () =>
+      [...resourcesToNodes(resources), ...foldersToNodes(folders)].find(
+        (node) => node.id === selectedResourceId
+      ),
+    [resources, folders, selectedResourceId]
+  );
 
   const theme = useTheme();
   const sm = useMediaQuery(theme.breakpoints.up("sm"));
@@ -579,12 +698,18 @@ function ResourcesCard() {
       !j.resourceType
   );
 
-  const isDetailsPaneOpen = !!selectedResourceId;
+  if (!dataCollections) return <Loading />;
 
   return (
     <>
       <SectionHeader
         primary="Resources"
+        secondary={
+          <ResourcesCardSubheader
+            dataCollections={dataCollections}
+            resources={resources}
+          />
+        }
         actions={
           <Box sx={{ display: "flex", gap: 2 }}>
             <NewResourceButton workspace={workspace} />
@@ -616,110 +741,83 @@ function ResourcesCard() {
             {isCloning && <InlineLoading />}
           </Card>
         </Box>
-        {isDetailsPaneOpen && <DetailsPane />}
+        {selectedResourceNode &&
+          (selectedResourceNode.type === "resource" ? (
+            <ResourceDetailsPane resource={selectedResourceNode.resource} />
+          ) : (
+            <FolderDetailsPane folder={selectedResourceNode.folder} />
+          ))}
       </Box>
     </>
   );
 }
 
-function DetailsPane() {
-  const { workspace, resources, selectedResourceId, setSelectedResourceId } =
-    useWorkspacePage();
-  const selectedResource = resources.find(
-    (r) => r.metadata.resourceId === selectedResourceId
-  );
+interface ResourceDetailsPaneProps {
+  resource: ResourceDescription;
+}
 
+function ResourceDetailsPane({ resource }: ResourceDetailsPaneProps) {
+  const { workspace, setSelectedResourceId } = useWorkspacePage();
   const tabs: { [key: string]: ReactNode } = {
-    Details: <DetailsTab />,
+    Details: <ResourceDetailsTab resource={resource} />,
+    Lineage: <LineageTab selectedResource={resource} />,
   };
-  const [tab, setTab] = useState("Details");
+  const [selectedTab, setSelectedTab] = useState("Details");
 
-  const theme = useTheme();
-  const sm = useMediaQuery(theme.breakpoints.up("sm"));
-
-  if (!selectedResource) return null;
   return (
-    <Box
-      sx={{
-        flexShrink: 0,
-        width: sm ? "600px" : "100%",
-        height: "fit-content",
-      }}
-    >
-      <Paper variant="outlined">
-        <DetailsPaneHeader
-          title={selectedResource?.metadata?.name || ""}
-          onClose={() => setSelectedResourceId("")}
-        >
-          <DetailsPaneActionBar
-            workspace={workspace}
-            selectedResource={selectedResource}
+    <DetailsPane
+      title={resource.metadata?.name}
+      tabs={tabs}
+      selectedTab={selectedTab}
+      setSelectedTab={setSelectedTab}
+      onClose={() => setSelectedResourceId("")}
+      actions={
+        <>
+          <EditResourceButton workspace={workspace} resource={resource} />
+          <ResourceMenuButton
+            resource={resource}
+            onDelete={() => setSelectedResourceId("")}
           />
-          <Tabs value={tab} onChange={(_, value) => setTab(value)}>
-            {Object.keys(tabs).map((key) => (
-              <Tab key={key} value={key} label={key} />
-            ))}
-          </Tabs>
-        </DetailsPaneHeader>
-        <Box sx={{ padding: 2 }}>{tabs[tab]}</Box>
-      </Paper>
-    </Box>
+        </>
+      }
+    />
   );
 }
-export interface DetailsPaneHeaderProps {
-  title?: string;
-  onClose: () => void;
-  children?: ReactNode;
+
+interface FolderDetailsPaneProps {
+  folder: Folder;
 }
 
-export function DetailsPaneHeader({
-  title,
-  onClose,
-  children,
-}: DetailsPaneHeaderProps): ReactElement {
+function FolderDetailsPane({ folder }: FolderDetailsPaneProps) {
+  const { setSelectedResourceId } = useWorkspacePage();
+  const tabs: { [key: string]: ReactNode } = {
+    Details: <FolderDetailsTab folder={folder} />,
+  };
+  const [selectedTab, setSelectedTab] = useState("Details");
+
   return (
-    <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: 2,
-        }}
-      >
-        <Typography variant="h2" sx={{ color: "#212121", fontSize: "16px" }}>
-          {title}
-        </Typography>
-        <IconButton onClick={onClose}>
-          <Icon>close</Icon>
-        </IconButton>
-      </Box>
-      <Box>{children}</Box>
-    </Box>
+    <DetailsPane
+      title={folder.displayName}
+      tabs={tabs}
+      selectedTab={selectedTab}
+      setSelectedTab={setSelectedTab}
+      onClose={() => setSelectedResourceId("")}
+    />
   );
 }
 
-export interface DetailsPaneActionBarProps {
+export interface EditResourceButtonProps {
   workspace: WorkspaceDescription;
-  selectedResource: ResourceDescription;
+  resource: ResourceDescription;
 }
 
-export function DetailsPaneActionBar({
+export function EditResourceButton({
   workspace,
-  selectedResource,
-}: DetailsPaneActionBarProps) {
-  const editResource = useEditResourceState(selectedResource);
-
+  resource,
+}: EditResourceButtonProps) {
+  const editResource = useEditResourceState(resource);
   return (
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        mb: 1,
-        pl: 3,
-        gap: 2,
-      }}
-    >
+    <>
       {editResource && (
         <Button
           variant="outlined"
@@ -729,42 +827,26 @@ export function DetailsPaneActionBar({
           Edit details
         </Button>
       )}
-      <ResourceMenuButton workspace={workspace} resource={selectedResource} />
       {/* Flyover Dialog */}
       {editResource && (
         <ResourceEdit
           workspace={workspace}
-          resource={selectedResource}
+          resource={resource}
           state={editResource}
         />
       )}
-    </Box>
+    </>
   );
 }
 
-function DetailsTab() {
-  const { workspace, resources, selectedResourceId } = useWorkspacePage();
-  const selectedResource = resources.find(
-    (r) => r.metadata.resourceId === selectedResourceId
-  );
+interface ResourceDetailsTabProps {
+  resource: ResourceDescription;
+}
 
-  const getResourceId = (resource: ResourceDescription) => {
-    switch (resource.metadata?.resourceType) {
-      case ResourceType.BigQueryDataset:
-        return resource.resourceAttributes.gcpBqDataset?.datasetId;
-      case ResourceType.BigQueryDataTable:
-        return resource.resourceAttributes.gcpBqDataTable?.datasetId;
-      case ResourceType.GcsBucket:
-        return resource.resourceAttributes.gcpGcsBucket?.bucketName;
-      case ResourceType.GcsObject:
-        return resource.resourceAttributes.gcpGcsObject?.bucketName;
-    }
-  };
-
-  if (!selectedResource) return <></>;
-
+function ResourceDetailsTab({ resource }: ResourceDetailsTabProps) {
+  const { workspace } = useWorkspacePage();
   const { resourceId, resourceType, stewardshipType, description } =
-    selectedResource.metadata;
+    resource.metadata;
 
   return (
     <Box>
@@ -790,98 +872,430 @@ function DetailsTab() {
         </Grid>
         <Grid item xs={9}>
           <Box display="flex" alignItems="center" mt={-0.5}>
-            <Typography>{getResourceId(selectedResource)}</Typography>
-            <OpenResourceButton
-              workspace={workspace}
-              resource={selectedResource}
-            />
+            <Typography>{getCloudResourceId(resource)}</Typography>
+            <OpenResourceButton workspace={workspace} resource={resource} />
           </Box>
         </Grid>
-        {description && (
-          <>
-            <Grid item xs={3}>
-              Description
-            </Grid>
-            <Grid item xs={9}>
-              <Typography align="left">{description}</Typography>
-            </Grid>
-          </>
-        )}
+        <Grid item xs={3}>
+          Description
+        </Grid>
+        <Grid item xs={9}>
+          <Typography align="left">{description || "--"}</Typography>
+        </Grid>
       </Grid>
     </Box>
   );
 }
 
+interface FolderDetailsTabProps {
+  folder: Folder;
+}
+
+function FolderDetailsTab({ folder }: FolderDetailsTabProps) {
+  return (
+    <Box>
+      <Grid container spacing={2}>
+        <Grid item xs={3}>
+          <Typography>Type</Typography>
+        </Grid>
+        <Grid item xs={9}>
+          <Typography align="left">Folder</Typography>
+        </Grid>
+        <Grid item xs={3}>
+          Description
+        </Grid>
+        <Grid item xs={9}>
+          <Typography align="left">{folder.description || "--"}</Typography>
+        </Grid>
+      </Grid>
+    </Box>
+  );
+}
+
+interface LineageTabProps {
+  selectedResource?: ResourceDescription;
+}
+
+function LineageTab({ selectedResource }: LineageTabProps) {
+  const { workspace } = useWorkspacePage();
+  const { data: resourceLineage } = useResourceGetLineage(
+    workspace.id,
+    selectedResource?.metadata.resourceId || "",
+    selectedResource?.metadata.resourceLineage || []
+  );
+
+  if (!selectedResource || !resourceLineage) return <></>;
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1, pt: 2 }}>
+      {[...resourceLineage, workspace, selectedResource].map(
+        (lineageItem, idx) => (
+          <>
+            {idx !== 0 && (
+              <Box // lineage chip separator
+                key={idx * 2}
+                sx={{
+                  backgroundColor: "rgba(0, 0, 0, 0.3)",
+                  width: "2px",
+                  height: "36px",
+                  ml: "18px",
+                }}
+              />
+            )}
+            <LineageChip key={idx * 2 + 1} lineageItem={lineageItem} />
+          </>
+        )
+      )}
+    </Box>
+  );
+}
+
+interface LineageChipProps {
+  lineageItem: ResourceLineageType;
+}
+
+function isWorkspace(item: ResourceLineageType): item is WorkspaceDescription {
+  return (
+    (item as WorkspaceDescription).id !== undefined &&
+    (item as WorkspaceDescription).userFacingId !== undefined &&
+    (item as WorkspaceDescription).highestRole !== undefined
+  );
+}
+
+function isResource(item: ResourceLineageType): item is ResourceDescription {
+  return (
+    (item as ResourceDescription).metadata !== undefined &&
+    (item as ResourceDescription).resourceAttributes !== undefined
+  );
+}
+
+interface LineageChipMetadata {
+  icon: ReactNode;
+  isIconHighlighted: boolean;
+  name: string;
+  lastUpdatedDate?: Date;
+  lastUpdatedBy?: string;
+  workspaceUrl?: string;
+  isDataCollection?: boolean;
+  errorMessage?: string;
+}
+
+function LineageChip({ lineageItem }: LineageChipProps) {
+  const userIdentity = useUserIdentity();
+  const theme = useTheme();
+
+  let metadata: LineageChipMetadata;
+  if (isResource(lineageItem)) {
+    metadata = {
+      icon: (
+        <ResourceIcon
+          resourceType={lineageItem.metadata.resourceType}
+          iconProps={{ sx: { color: "white" } }}
+        />
+      ),
+      isIconHighlighted: true,
+      name: lineageItem.metadata.name || "",
+    };
+  } else if (isWorkspace(lineageItem)) {
+    metadata = {
+      icon: <Icon sx={{ color: "white" }}>bubble_chart</Icon>,
+      isIconHighlighted: false,
+      name: lineageItem.userFacingId,
+      lastUpdatedDate: lineageItem.lastUpdatedDate,
+      lastUpdatedBy: userIdentity(lineageItem.lastUpdatedBy),
+      workspaceUrl: `/workspaces/${lineageItem.userFacingId}`,
+    };
+    if (isDataCollection(lineageItem)) {
+      // workspace is a data collection
+      metadata = Object.assign(metadata, {
+        icon: <Icon sx={{ color: "white" }}>collections_bookmark</Icon>,
+        isDataCollection: true,
+      });
+    }
+  } else {
+    // lineageItem is unknown
+    metadata = {
+      icon: <Icon sx={{ color: "white" }}>bubble_chart</Icon>,
+      isIconHighlighted: false,
+      name: "Unknown Workspace",
+      errorMessage: "You don't have access to this workspace",
+    };
+  }
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        gap: 1,
+      }}
+    >
+      <Box
+        sx={{
+          width: "40px",
+          height: "40px",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: metadata.isIconHighlighted
+            ? theme.palette.primary.main
+            : "rgba(0, 0, 0, 0.3)",
+          borderRadius: "50%",
+        }}
+      >
+        {metadata.icon}
+      </Box>
+      <Box>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            mt: -0.5,
+            height: "20px",
+          }}
+        >
+          <Typography sx={{ fontWeight: 700 }}>{metadata.name}</Typography>
+          {metadata.workspaceUrl && (
+            <IconButton href={metadata.workspaceUrl} target="_blank">
+              <Icon>open_in_new</Icon>
+            </IconButton>
+          )}
+        </Box>
+        <Box
+          sx={{
+            display: "flex",
+            fontSize: "12px",
+            color: theme.palette.grey[600],
+          }}
+        >
+          {metadata.errorMessage ? (
+            metadata.errorMessage
+          ) : (
+            <>
+              {metadata.isDataCollection && <>Published&nbsp;</>}
+              <AbsoluteDateTooltip date={metadata.lastUpdatedDate}>
+                {lastModifiedToString(metadata.lastUpdatedDate) || "--"}
+              </AbsoluteDateTooltip>
+              &nbsp;
+              {metadata.lastUpdatedBy && (
+                <OverflowTooltip
+                  title={`by ${userIdentity(metadata.lastUpdatedBy)}`}
+                />
+              )}
+            </>
+          )}
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
 function ResourcesTable() {
-  const { selectedResourceId, setSelectedResourceId } = useWorkspacePage();
   const resources = useWorkspacePageResources();
+  const { folders, selectedResourceId, setSelectedResourceId } =
+    useWorkspacePage();
+
+  const resourceNodes = useMemo(() => {
+    return [...resourcesToNodes(resources), ...foldersToNodes(folders)];
+  }, [resources, folders]);
+
+  const resourceNodeChildrenMap = useMemo(() => {
+    const map = new Map<string, ResourceNode[]>();
+    resourceNodes.forEach((node) => {
+      const parentId = node.parentId || "";
+      map.set(parentId, [...(map.get(parentId) || []), node]);
+    });
+    return map;
+  }, [resourceNodes]);
 
   return (
     <TableContainer>
-      <ResourceTableControl resources={resources}>
-        {({ sortedResources }) => (
-          <Table
-            size="small"
-            width="100%"
-            sx={{ tableLayout: "fixed" }}
-            data-testid="resources-table"
-          >
-            <TableHead sx={{ bgcolor: "table.head" }}>
-              <TableRow>
-                <TableCell width="5%">
-                  <ResourceTableSortField field="resourceType" />
-                </TableCell>
-                <TableCell width="35%">
-                  <ResourceTableSortField label="Name" field="name" />
-                </TableCell>
-                <TableCell width="60%">
-                  <ResourceTableSortField
-                    label="Description"
-                    field="description"
+      {/* Sorting disabled */}
+      <Table
+        size="small"
+        width="100%"
+        sx={{ tableLayout: "fixed" }}
+        data-testid="resources-table"
+      >
+        <TableHead sx={{ bgcolor: "table.head" }}>
+          <TableRow>
+            <TableCell width="80%">
+              <ResourceTableSortField label="Name & Description" field="name" />
+            </TableCell>
+            <TableCell width="20%">
+              <ResourceTableSortField label="Type" field="resourceType" />
+            </TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {resourceNodeChildrenMap.get("")?.map((resourceNode) => (
+            <ResourceNodeRow
+              key={resourceNode.id}
+              resourceNode={resourceNode}
+              resourceNodeChildrenMap={resourceNodeChildrenMap}
+            >
+              {(resourceNode, isExpanded, setIsExpanded, indent) =>
+                resourceNode.type === "resource" ? (
+                  <ResourceRow
+                    resource={resourceNode.resource}
+                    setSelectedResourceId={setSelectedResourceId}
+                    indent={indent}
+                    selected={resourceNode.id === selectedResourceId}
                   />
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {sortedResources.map((resource) => {
-                const metadata = resource.metadata || {};
-                return (
-                  <TableRow
-                    key={metadata.resourceId}
-                    hover
-                    selected={selectedResourceId === metadata.resourceId}
-                    sx={{
-                      "&:hover": {
-                        cursor: "pointer",
-                      },
-                    }}
-                    onClick={() => setSelectedResourceId(metadata.resourceId)}
-                  >
-                    <TableCell>
-                      <ResourceIcon
-                        resourceType={metadata.resourceType}
-                        iconProps={{ sx: { verticalAlign: "middle" } }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <OverflowTooltip title={metadata.name} />
-                      <NoWrapTypography
-                        sx={{ fontSize: 12, color: "table.secondary" }}
-                      >
-                        {resourceTypeToString(metadata.resourceType)}
-                        ,&nbsp;
-                        {stewardshipTypeToString(metadata.stewardshipType)}
-                      </NoWrapTypography>
-                    </TableCell>
-                    <NoWrapCell>{metadata.description}</NoWrapCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
-      </ResourceTableControl>
+                ) : (
+                  <FolderRow
+                    folder={resourceNode.folder}
+                    setSelectedResourceId={setSelectedResourceId}
+                    isExpanded={isExpanded}
+                    setIsExpanded={setIsExpanded}
+                    indent={indent}
+                    selected={resourceNode.id === selectedResourceId}
+                  />
+                )
+              }
+            </ResourceNodeRow>
+          ))}
+        </TableBody>
+      </Table>
     </TableContainer>
+  );
+}
+
+interface ResourceRowProps {
+  resource: ResourceDescription;
+  setSelectedResourceId: (resourceId: string) => void;
+  indent?: number;
+  selected?: boolean;
+}
+
+function ResourceRow({
+  resource,
+  setSelectedResourceId,
+  indent = 0,
+  selected = false,
+}: ResourceRowProps) {
+  const { resourceId, resourceType, name, description, stewardshipType } =
+    resource.metadata;
+
+  return (
+    <TableRow
+      key={resourceId}
+      hover
+      selected={selected}
+      sx={{
+        "&:hover": {
+          cursor: "pointer",
+        },
+      }}
+      onClick={() => setSelectedResourceId(resourceId)}
+    >
+      <TableCell
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          overflow: "hidden",
+          minHeight: "56px",
+          gap: 1,
+          pl: 1 + indent * 3,
+        }}
+      >
+        <Box sx={{ width: "38px" }} />
+        <ResourceIcon resourceType={resourceType} />
+        <Box>
+          <Typography sx={{ fontWeight: 700, fontSize: 14 }}>{name}</Typography>
+          <MultilineTypography
+            maxLines={2}
+            sx={{
+              fontSize: 12,
+              color: "table.secondary",
+            }}
+          >
+            {description}
+          </MultilineTypography>
+        </Box>
+      </TableCell>
+      <NoWrapCell>
+        <NoWrapTypography sx={{ fontSize: 12, color: "table.secondary" }}>
+          {resourceTypeToString(resourceType)}
+          {stewardshipType && (
+            <>,&nbsp;{stewardshipTypeToString(stewardshipType)}</>
+          )}
+        </NoWrapTypography>
+      </NoWrapCell>
+    </TableRow>
+  );
+}
+
+interface FolderRowProps {
+  folder: Folder;
+  isExpanded: boolean;
+  setSelectedResourceId: (resourceId: string) => void;
+  setIsExpanded: (isExpanded: boolean) => void;
+  selected?: boolean;
+  indent?: number;
+}
+
+function FolderRow({
+  folder,
+  isExpanded,
+  setSelectedResourceId,
+  setIsExpanded,
+  selected = false,
+  indent = 0,
+}: FolderRowProps) {
+  const { id, displayName, description } = folder;
+
+  return (
+    <TableRow
+      key={id}
+      hover
+      selected={selected}
+      sx={{
+        "&:hover": {
+          cursor: "pointer",
+        },
+      }}
+      onClick={() => setSelectedResourceId(id)}
+    >
+      <TableCell
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          overflow: "hidden",
+          minHeight: "56px",
+          gap: 1,
+          pl: 1 + indent * 3,
+        }}
+      >
+        <IconButton
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsExpanded(!isExpanded);
+          }}
+        >
+          {isExpanded ? <Icon>arrow_drop_down</Icon> : <Icon>arrow_right</Icon>}
+        </IconButton>
+        <Icon>folder_open</Icon>
+        <Box>
+          <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
+            {displayName}
+          </Typography>
+          <MultilineTypography
+            maxLines={2}
+            sx={{
+              fontSize: 12,
+              color: "table.secondary",
+            }}
+          >
+            {description}
+          </MultilineTypography>
+        </Box>
+      </TableCell>
+      <NoWrapCell>
+        <NoWrapTypography sx={{ fontSize: 12, color: "table.secondary" }}>
+          Folder
+        </NoWrapTypography>
+      </NoWrapCell>
+    </TableRow>
   );
 }
 
@@ -976,7 +1390,6 @@ function NotebooksCard() {
     <>
       <SectionHeader
         primary="Your notebook instances"
-        color="primary.main"
         actions={notebooks.length > 0 && newNotebookButton}
       />
       {notebooks.map((notebook) => (
@@ -1042,42 +1455,6 @@ function MenuButton() {
   );
 }
 
-interface ResourceMenuButtonProps {
-  workspace: WorkspaceDescription;
-  resource: ResourceDescription;
-  job?: EnumeratedJob;
-}
-
-function ResourceMenuButton({ resource, job }: ResourceMenuButtonProps) {
-  const { setSelectedResourceId } = useWorkspacePage();
-  const deleteResource = useDeleteResource(resource);
-  const menuState = usePopupState({
-    variant: "popover",
-    popupId: `resource-menu-${resource.metadata?.resourceId}`,
-  });
-
-  return job ? (
-    <CircularProgress color="primary" size={20} sx={{ m: 1 }} />
-  ) : (
-    <div>
-      <IconButton size="small" {...bindTrigger(menuState)}>
-        <Icon>more_vert</Icon>
-      </IconButton>
-      <LoadingBackdrop open={deleteResource.isPending} />
-      <Menu onClick={menuState.close} {...bindMenu(menuState)}>
-        <MenuItem
-          onClick={() => {
-            setSelectedResourceId("");
-            deleteResource.run();
-          }}
-        >
-          Delete
-        </MenuItem>
-      </Menu>
-    </div>
-  );
-}
-
 interface ResourceEditProps {
   workspace: WorkspaceDescription;
   resource: ResourceDescription;
@@ -1094,6 +1471,30 @@ function ResourceEdit({ workspace, resource, state }: ResourceEditProps) {
           {...bindFlyover(state)}
         />
       );
+    case ResourceType.GcsObject:
+      return (
+        <EditGcsObject
+          workspace={workspace}
+          resource={resource}
+          {...bindFlyover(state)}
+        />
+      );
+    case ResourceType.BigQueryDataset:
+      return (
+        <EditDataset
+          workspace={workspace}
+          resource={resource}
+          {...bindFlyover(state)}
+        />
+      );
+    case ResourceType.BigQueryDataTable:
+      return (
+        <EditDatatable
+          workspace={workspace}
+          resource={resource}
+          {...bindFlyover(state)}
+        />
+      );
     default:
       return null;
   }
@@ -1101,10 +1502,19 @@ function ResourceEdit({ workspace, resource, state }: ResourceEditProps) {
 
 function useEditResourceState(resource: ResourceDescription) {
   const editGcsBucketState = useEditGcsBucketState(resource);
+  const editGcsObjectState = useEditGcsObjectState(resource);
+  const editDatasetState = useEditDatasetState(resource);
+  const editDatatableState = useEditDatatableState(resource);
 
   switch (resource.metadata.resourceType) {
     case ResourceType.GcsBucket:
       return editGcsBucketState;
+    case ResourceType.GcsObject:
+      return editGcsObjectState;
+    case ResourceType.BigQueryDataset:
+      return editDatasetState;
+    case ResourceType.BigQueryDataTable:
+      return editDatatableState;
     default:
       return null;
   }
@@ -1122,3 +1532,16 @@ function resourceJob(resource: ResourceDescription, jobs: EnumeratedJob[]) {
       j.metadata?.resourceId === resource.metadata?.resourceId
   );
 }
+
+const getCloudResourceId = (resource: ResourceDescription) => {
+  switch (resource.metadata?.resourceType) {
+    case ResourceType.BigQueryDataset:
+      return resource.resourceAttributes.gcpBqDataset?.datasetId;
+    case ResourceType.BigQueryDataTable:
+      return resource.resourceAttributes.gcpBqDataTable?.datasetId;
+    case ResourceType.GcsBucket:
+      return resource.resourceAttributes.gcpGcsBucket?.bucketName;
+    case ResourceType.GcsObject:
+      return resource.resourceAttributes.gcpGcsObject?.bucketName;
+  }
+};

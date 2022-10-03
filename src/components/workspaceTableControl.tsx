@@ -72,7 +72,7 @@ const WorkspaceTableContext = createContext<WorkspaceTableState>(
 export type WorkspaceTableSortFieldProps = {
   label: string;
 } & (
-  | { field: WorkspaceSortField }
+  | { field: WorkspaceStringSortField }
   | {
       comparator: (a: WorkspaceDescription, b: WorkspaceDescription) => number;
     }
@@ -84,7 +84,7 @@ export function WorkspaceTableSortField(props: WorkspaceTableSortFieldProps) {
   const comparator =
     "comparator" in props
       ? props.comparator
-      : getWorkspaceComparator(props.field);
+      : getWorkspaceStringComparator(props.field);
 
   const { order, orderBy, setOrder, setOrderBy, setComparator } = useContext(
     WorkspaceTableContext
@@ -607,7 +607,7 @@ export function WorkspaceTableControl({
   const [orderBy, setOrderBy] = useState<string | undefined>("displayName");
 
   const [comparator, setComparator] = useState(() =>
-    getWorkspaceComparator("displayName")
+    getWorkspaceStringComparator("displayName")
   );
 
   const [filterList, setFilterList] = useState<Filter[]>([]);
@@ -655,15 +655,26 @@ export function WorkspaceTableControl({
   );
 }
 
-type WorkspaceSortField = keyof Pick<
+type WorkspaceStringSortField = keyof Pick<
   WorkspaceDescription,
   "userFacingId" | "displayName" | "description" | "createdBy"
 >;
 
-export function getWorkspaceComparator(
-  field: WorkspaceSortField
+type WorkspaceDateSortField = keyof Pick<
+  WorkspaceDescription,
+  "lastUpdatedDate"
+>;
+
+export function getWorkspaceStringComparator(
+  field: WorkspaceStringSortField
 ): (a: WorkspaceDescription, b: WorkspaceDescription) => number {
   return (a, b) => (a[field] || "").localeCompare(b[field] || "");
+}
+
+export function getWorkspaceDateComparator(
+  field: WorkspaceDateSortField
+): (a: WorkspaceDescription, b: WorkspaceDescription) => number {
+  return (a, b) => (a[field]?.getTime() || 0) - (b[field]?.getTime() || 0);
 }
 
 type WorkspaceStringFilterField = keyof Pick<
@@ -683,8 +694,8 @@ export const workspaceNameDescriptionComparator = (
   a: WorkspaceDescription,
   b: WorkspaceDescription
 ) =>
-  getWorkspaceComparator("displayName")(a, b) ||
-  getWorkspaceComparator("description")(a, b);
+  getWorkspaceStringComparator("displayName")(a, b) ||
+  getWorkspaceStringComparator("description")(a, b);
 
 export const workspaceAccessLevelComparator = (
   a: WorkspaceDescription,

@@ -1,6 +1,7 @@
 import {
   Box,
   Divider,
+  Grid,
   Icon,
   IconButton,
   Link,
@@ -14,6 +15,8 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Typography,
+  useMediaQuery,
   useTheme,
 } from "@mui/material";
 import {
@@ -40,16 +43,18 @@ import { ALL_ROLES, roleContains } from "../components/iamRole";
 import { lastModifiedToString } from "../components/lastModified";
 import { Loading } from "../components/loading";
 import { LoadingBackdrop } from "../components/loadingBackdrop";
+import { MultilineTypography } from "../components/multilineTypography";
 import { NoWrapCell } from "../components/noWrapCell";
 import { NoWrapTypography } from "../components/noWrapTypography";
 import { OverflowTooltip } from "../components/overflowTooltip";
 import { PageContent, PageContentCard } from "../components/pageContent";
 import { PageTitle } from "../components/pageTitle";
+import { useRecentWorkspaces } from "../components/recentWorkspaces";
 import { useShareWorkspace } from "../components/shareWorkspace";
 import { useTitlePrefix } from "../components/title";
 import { useUserIdentity } from "../components/useUserIdentity";
 import {
-  getWorkspaceComparator,
+  getWorkspaceStringComparator,
   workspaceAccessLevelComparator,
   workspaceNameDescriptionComparator,
   WorkspaceTableControl,
@@ -64,10 +69,12 @@ export default function WorkspacesPage(): ReactElement {
   const errorHandler = usePageErrorHandler();
 
   const { data: workspaces } = useWorkspaceList({ onError: errorHandler });
+  const recentWorkspaces = useRecentWorkspaces(workspaces);
 
   if (workspaces === undefined) {
     return <Loading />;
   }
+
   return (
     <div>
       <PageTitle
@@ -78,6 +85,9 @@ export default function WorkspacesPage(): ReactElement {
       />
       {workspaces.length ? (
         <PageContent>
+          {!!recentWorkspaces.length && (
+            <RecentWorkspaces recentWorkspaces={recentWorkspaces} />
+          )}
           <WorkspacesTable workspaces={workspaces} />
         </PageContent>
       ) : (
@@ -89,6 +99,77 @@ export default function WorkspacesPage(): ReactElement {
           />
         </PageContentCard>
       )}
+    </div>
+  );
+}
+
+interface RecentWorkspacesProps {
+  recentWorkspaces: WorkspaceDescription[];
+}
+function RecentWorkspaces({ recentWorkspaces }: RecentWorkspacesProps) {
+  const theme = useTheme();
+  const med = useMediaQuery(theme.breakpoints.down("lg"));
+  const small = useMediaQuery(theme.breakpoints.down("md"));
+
+  return (
+    <div>
+      <Typography fontSize={16} mb={1}>
+        Recent workspaces
+      </Typography>
+      <Grid container spacing={3} mb={3}>
+        {recentWorkspaces
+          .slice(0, small ? 2 : med ? 3 : 4)
+          .map((workspace, id) => {
+            return (
+              <Grid item lg={3} md={4} xs={6} key={id}>
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    height: "180px",
+                  }}
+                >
+                  <Box px={3} py={3}>
+                    <OverflowTooltip
+                      title={workspace.displayName || workspace.id}
+                    >
+                      <Link
+                        component={RouterLink}
+                        variant="h2"
+                        to={"/workspaces/" + workspace.userFacingId}
+                        underline="none"
+                        gutterBottom
+                        sx={{
+                          color: "black",
+                          ":hover": { color: theme.palette.primary.main },
+                        }}
+                      >
+                        {workspace.displayName || workspace.id}
+                      </Link>
+                    </OverflowTooltip>
+                    <Typography
+                      variant="subtitle1"
+                      gutterBottom
+                      sx={{
+                        color: "grey.600",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {`Last updated ${
+                        lastModifiedToString(workspace.lastUpdatedDate) ||
+                        "Unknown"
+                      }`}
+                    </Typography>
+                    <MultilineTypography maxLines={4}>
+                      {workspace.description || "--"}
+                    </MultilineTypography>
+                  </Box>
+                </Paper>
+              </Grid>
+            );
+          })}
+      </Grid>
     </div>
   );
 }
@@ -202,7 +283,7 @@ function WorkspacesTable(props: WorkspacesTableProps) {
                   <TableCell width="17.5%">
                     <WorkspaceTableSortField
                       label="Created by"
-                      comparator={getWorkspaceComparator("createdBy")}
+                      comparator={getWorkspaceStringComparator("createdBy")}
                     />
                   </TableCell>
                   <TableCell width="17.5%">

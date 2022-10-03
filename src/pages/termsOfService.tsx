@@ -5,6 +5,7 @@ import { PageContentCard } from "../components/pageContent";
 /*
 Source Doc: https://docs.google.com/document/d/1vFVGfRs-8Yi7xFqkawvZTugFRmYQIgPahH8uh5IJ8g4/edit?usp=sharing
 Converted to HTML using: https://github.com/evbacher/gd2md-html 
+Note: "Exhibit A" line at the top manually removed.
 */
 const content = raw("../docs/termsOfService.html");
 

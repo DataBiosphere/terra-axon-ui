@@ -6,14 +6,15 @@ import { Form } from "react-final-form";
 import * as Yup from "yup";
 import {
   ResourceDescription,
-  StewardshipType,
   WorkspaceDescription,
 } from "../generated/workspacemanager";
 import { useResourceUpdated } from "./api/resourceList";
 import { useApi } from "./apiProvider";
-import { bucketNameField, BucketNameTextField } from "./bucketNameField";
+import { datasetNameField, DatasetNameTextField } from "./datasetNameField";
 import { ErrorList } from "./errorhandler";
 import {
+  dataTableNameField,
+  projectIdField,
   resourceNameField,
   resourceNameHelperText,
   toFinalFormError,
@@ -30,34 +31,36 @@ import { LoadingBackdrop } from "./loadingBackdrop";
 const schema = Yup.object({
   name: resourceNameField(),
   description: Yup.string(),
-  bucketName: bucketNameField(StewardshipType.Referenced),
+  dataTableName: dataTableNameField(),
+  datasetName: datasetNameField(true),
+  projectId: projectIdField(),
 });
 type Fields = Yup.InferType<typeof schema>;
 
-export function useEditGcsBucketState(resource: ResourceDescription) {
+export function useEditDatatableState(resource: ResourceDescription) {
   return usePopupState({
     variant: "dialog",
-    popupId: `edit-bucket-${resource.metadata.resourceId}`,
+    popupId: `edit-datatable-${resource.metadata.resourceId}`,
   });
 }
 
-export interface EditGcsBucketProps extends Omit<FlyoverProps, "children"> {
+export interface EditDatatableProps extends Omit<FlyoverProps, "children"> {
   workspace: WorkspaceDescription;
   resource: ResourceDescription;
 }
 
-export function EditGcsBucket({
+export function EditDatatable({
   workspace,
   resource,
   ...flyoverProps
-}: EditGcsBucketProps) {
-  const editGcsBucketAction = useEditGcsBucketAction(workspace, resource);
+}: EditDatatableProps) {
+  const editDatatableAction = useEditDatatableAction(workspace, resource);
 
   return (
-    <Flyover title="Edit the cloud storage bucket" {...flyoverProps}>
+    <Flyover title="Edit the BigQuery data table" {...flyoverProps}>
       <Form
         onSubmit={(values: Fields) =>
-          editGcsBucketAction(values).then(
+          editDatatableAction(values).then(
             () => flyoverProps.onClose(),
             toFinalFormError
           )
@@ -65,8 +68,12 @@ export function EditGcsBucket({
         initialValues={{
           name: resource.metadata.name || "",
           description: resource.metadata.description || "",
-          bucketName:
-            resource.resourceAttributes.gcpGcsBucket?.bucketName || "",
+          dataTableName:
+            resource.resourceAttributes.gcpBqDataTable?.dataTableId || "",
+          datasetName:
+            resource.resourceAttributes.gcpBqDataTable?.datasetId || "",
+          projectId:
+            resource.resourceAttributes.gcpBqDataTable?.projectId || "",
         }}
         validate={(values: Fields) => validateFields(schema, values)}
         render={({
@@ -93,12 +100,20 @@ export function EditGcsBucket({
                 name="description"
                 label="Description"
               />
-              <BucketNameTextField
-                stewardship={StewardshipType.Referenced}
-                disabled={
-                  resource.metadata.stewardshipType ==
-                  StewardshipType.Controlled
-                }
+              <DatasetNameTextField required />
+              <TextField
+                required
+                fullWidth
+                margin="dense"
+                label="Cloud data table name"
+                name="dataTableName"
+              />
+              <TextField
+                required
+                fullWidth
+                margin="dense"
+                label="Project ID"
+                name="projectId"
               />
             </FlyoverContent>
             <FlyoverActions>
@@ -118,58 +133,42 @@ export function EditGcsBucket({
   );
 }
 
-function useEditGcsBucketAction(
+function useEditDatatableAction(
   workspace: WorkspaceDescription,
   resource: ResourceDescription
 ) {
-  const { controlledGcpResourceApi, referencedGcpResourceApi } = useApi();
+  const { referencedGcpResourceApi } = useApi();
   const resourceUpdated = useResourceUpdated();
   return useCallback(
     async (fields: Fields) =>
-      resource.metadata.stewardshipType == StewardshipType.Controlled
-        ? controlledGcpResourceApi
-            .updateGcsBucket({
-              workspaceId: workspace.id,
-              resourceId: resource.metadata.resourceId,
-              updateControlledGcpGcsBucketRequestBody: {
-                name: fields.name,
-                description: fields.description,
-              },
-            })
-            .then((b) =>
-              resourceUpdated({
-                metadata: b.metadata,
-                resourceAttributes: { gcpGcsBucket: b.attributes },
-              })
-            )
-        : referencedGcpResourceApi
-            .updateBucketReferenceResource({
-              workspaceId: workspace.id,
-              resourceId: resource.metadata.resourceId,
-              updateGcsBucketReferenceRequestBody: {
-                name: fields.name,
-                description: fields.description,
-                bucketName: fields.bucketName,
-              },
-            })
-            .then(() =>
-              // TODO: Use response rather than fetching manually [PF-1987]
-              referencedGcpResourceApi.getBucketReference({
-                resourceId: resource.metadata.resourceId,
-                workspaceId: workspace.id,
-              })
-            )
-            .then((b) =>
-              resourceUpdated({
-                metadata: b.metadata,
-                resourceAttributes: { gcpGcsBucket: b.attributes },
-              })
-            ),
+      referencedGcpResourceApi
+        .updateBigQueryDataTableReferenceResource({
+          workspaceId: workspace.id,
+          resourceId: resource.metadata.resourceId,
+          updateBigQueryDataTableReferenceRequestBody: {
+            name: fields.name,
+            description: fields.description,
+            projectId: fields.projectId,
+            dataTableId: fields.dataTableName || "",
+            datasetId: fields.datasetName || "",
+          },
+        })
+        .then(() =>
+          // TODO: Use response rather than fetching manually [PF-1987]
+          referencedGcpResourceApi.getBigQueryDataTableReference({
+            resourceId: resource.metadata.resourceId,
+            workspaceId: workspace.id,
+          })
+        )
+        .then((b) =>
+          resourceUpdated({
+            metadata: b.metadata,
+            resourceAttributes: { gcpBqDataTable: b.attributes },
+          })
+        ),
     [
-      controlledGcpResourceApi,
       referencedGcpResourceApi,
       resource.metadata.resourceId,
-      resource.metadata.stewardshipType,
       workspace.id,
       resourceUpdated,
     ]

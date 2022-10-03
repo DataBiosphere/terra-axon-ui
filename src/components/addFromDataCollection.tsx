@@ -4,6 +4,7 @@ import {
   Checkbox,
   Icon,
   Paper,
+  RadioGroup,
   Step,
   StepLabel,
   Stepper,
@@ -18,20 +19,24 @@ import {
   TypographyProps,
 } from "@mui/material";
 import { ValidationErrors } from "final-form";
+import { TextField } from "mui-rff";
 import { useSnackbar } from "notistack";
 import {
   Dispatch,
   ReactElement,
   SetStateAction,
   useCallback,
+  useEffect,
   useMemo,
   useState,
 } from "react";
-import { Form } from "react-final-form";
+import { Form, useForm } from "react-final-form";
+import * as Yup from "yup";
 import {
   CloningInstructionsEnum,
   IamRole,
   ResourceDescription,
+  ResourceMetadata,
   ResourceType,
   StewardshipType,
   WorkspaceDescription,
@@ -40,19 +45,33 @@ import {
   AbsoluteDateTooltip,
   dateToAbsoluteDateString,
 } from "./absoluteDateTooltip";
-import { useResourceList, useResourceListReload } from "./api/resourceList";
+import { useFolderListReload } from "./api/folder";
+import {
+  ResourcePropertyNames,
+  useResourceList,
+  useResourceListReload,
+} from "./api/resourceList";
 import { useDataCollectionList } from "./api/workspace";
 import { useApi } from "./apiProvider";
 import { DisablableTableRow } from "./disablableTableRow";
 import { ErrorList, errorMessage, usePageErrorHandler } from "./errorhandler";
+import { toFinalFormError } from "./fieldValidation";
 import { FixedStepConnector } from "./fixedStepConnector";
 import { FlyoverActions, FlyoverContent, useFlyover } from "./flyover";
+import { folderNameField, FolderNameTextField } from "./folderNameField";
+import {
+  defaultFolderPath,
+  FolderPathField,
+  folderPathField,
+  isRootFolder,
+} from "./folderPathField";
 import { roleContains } from "./iamRole";
 import { lastModifiedToString } from "./lastModified";
 import { Loading } from "./loading";
 import { NoWrapCell } from "./noWrapCell";
 import { NoWrapTypography } from "./noWrapTypography";
 import { OverflowTooltip } from "./overflowTooltip";
+import { RadioButton } from "./radioButton";
 import { ResourceIcon } from "./resourceIcon";
 import {
   ResourceTableControl,
@@ -65,6 +84,14 @@ import {
   workspaceNameDescriptionComparator,
   WorkspaceTableSortField,
 } from "./workspaceTableControl";
+
+const schema = Yup.object({
+  newOrExistingFolder: Yup.string(),
+  folderName: folderNameField(),
+  folderPath: folderPathField(),
+  description: Yup.string(),
+});
+type Fields = Yup.InferType<typeof schema>;
 
 export interface AddFromDataCollectionState {
   addFromDataCollection: ReactElement;
@@ -81,12 +108,14 @@ export function useAddFromDataCollection({
   resources: existingResources,
 }: AddFromDataCollectionProps): AddFromDataCollectionState {
   const [dataCollection, setDataCollection] = useState<WorkspaceDescription>();
+
   const [resources, setResources] = useState<ResourceDescription[]>();
+  useEffect(() => setResources([]), [dataCollection]);
 
   const steps: {
     [label: string]: [
       (props: StepProps) => JSX.Element,
-      () => ValidationErrors
+      (fields: Fields) => ValidationErrors
     ];
   } = {
     "Select collection": [
@@ -107,8 +136,11 @@ export function useAddFromDataCollection({
     ],
     "Review selection": [
       ReviewStep,
-      () => {
-        return {};
+      ({ newOrExistingFolder, folderName }: Fields) => {
+        if (!newOrExistingFolder)
+          return { newOrExistingFolder: "Select target" };
+        if (newOrExistingFolder === "new" && !folderName)
+          return { folderName: "Specify a folder name" };
       },
     ],
   };
@@ -118,6 +150,7 @@ export function useAddFromDataCollection({
   const [StepContents, onValidate] = Object.values(steps)[step];
 
   const stepProps: StepProps = {
+    workspace: workspace,
     existingResources: existingResources,
     dataCollection: dataCollection,
     setDataCollection: setDataCollection,
@@ -132,10 +165,14 @@ export function useAddFromDataCollection({
     title: "Add from data catalog",
     children: (
       <Form
+        initialValues={{ folderPath: defaultFolderPath() }}
         onSubmit={
           isLastStep
-            ? () =>
-                createDataCollection(resources || []).then(() => setOpen(false))
+            ? (values: Fields) =>
+                createDataCollection(resources || [], values).then(
+                  () => setOpen(false),
+                  toFinalFormError
+                )
             : () => setStep(step + 1)
         }
         validate={onValidate}
@@ -186,6 +223,7 @@ export function useAddFromDataCollection({
 }
 
 interface StepProps {
+  workspace: WorkspaceDescription;
   existingResources: ResourceDescription[];
   dataCollection?: WorkspaceDescription;
   setDataCollection: Dispatch<SetStateAction<WorkspaceDescription | undefined>>;
@@ -502,11 +540,21 @@ function ResourcesStep({
   );
 }
 
-function ReviewStep({ dataCollection, resources }: StepProps) {
+function ReviewStep({ dataCollection, workspace, resources }: StepProps) {
+  const form = useForm();
+  const newOrExistingFolder = form.getFieldState("newOrExistingFolder")?.value;
+
+  useEffect(() => {
+    if (dataCollection) {
+      form.change("folderName", `Data from ${dataCollection.displayName}`);
+      form.change("description", dataCollection.description);
+    }
+  }, [dataCollection, form]);
+
   return (
     <div>
       <StepDescription>
-        Review your selection. Got all the data you need? Let’s add those
+        Review your selection. Got all the data you need? Let&apos;s add those
         resources to your workspace.
       </StepDescription>
       <Typography
@@ -569,6 +617,39 @@ function ReviewStep({ dataCollection, resources }: StepProps) {
           )}
         </ResourceTableControl>
       </TableContainer>
+      <StepDescription>
+        Where should we send your new resources?
+      </StepDescription>
+      <RadioGroup row sx={{ my: 2, gap: 2 }}>
+        <RadioButton
+          name="newOrExistingFolder"
+          primary="Create a new folder"
+          secondary="Enter name and description"
+          value="new"
+        />
+        <RadioButton
+          name="newOrExistingFolder"
+          primary="Add to an existing folder"
+          secondary="Select root for top level folder"
+          value="existing"
+        />
+      </RadioGroup>
+      {newOrExistingFolder === "new" && (
+        <div>
+          <FolderNameTextField />
+          <FolderPathField workspace={workspace} />
+          <Typography sx={{ my: 2 }}>Edit folder details (optional)</Typography>
+          <TextField
+            fullWidth
+            margin="dense"
+            label="Description"
+            name="description"
+          />
+        </div>
+      )}
+      {newOrExistingFolder == "existing" && (
+        <FolderPathField workspace={workspace} />
+      )}
     </div>
   );
 }
@@ -599,68 +680,110 @@ const StepDescription = (props: TypographyProps) => (
 );
 
 function useCreateReferencesAction(workspace: WorkspaceDescription) {
-  const { referencedGcpResourceApi } = useApi();
+  const { folderApi, resourceApi, referencedGcpResourceApi } = useApi();
   const { enqueueSnackbar } = useSnackbar();
   const resourceListReload = useResourceListReload();
+  const folderListReload = useFolderListReload();
   return useCallback(
-    (resources: ResourceDescription[]) =>
-      Promise.allSettled(
-        resources.map((r) => {
-          if (r.metadata.stewardshipType !== StewardshipType.Referenced) {
-            return Promise.reject(
-              new Error(
-                `Unable to clone resource stewardship ${r.metadata.stewardshipType}`
-              )
-            );
-          }
-          const cloneProps = {
-            workspaceId: r.metadata.workspaceId,
-            resourceId: r.metadata.resourceId,
-            cloneReferencedResourceRequestBody: {
-              destinationWorkspaceId: workspace.id,
-              cloningInstructions: CloningInstructionsEnum.Reference,
-            },
-          };
-          switch (r.metadata.resourceType) {
-            case ResourceType.BigQueryDataset:
-              return referencedGcpResourceApi.cloneGcpBigQueryDatasetReference(
-                cloneProps
-              );
-            case ResourceType.BigQueryDataTable:
-              return referencedGcpResourceApi.cloneGcpBigQueryDataTableReference(
-                cloneProps
-              );
-            case ResourceType.GcsBucket:
-              return referencedGcpResourceApi.cloneGcpGcsBucketReference(
-                cloneProps
-              );
-            case ResourceType.GcsObject:
-              return referencedGcpResourceApi.cloneGcpGcsObjectReference(
-                cloneProps
-              );
-            case ResourceType.GitRepo:
-              return referencedGcpResourceApi.cloneGitRepoReference(cloneProps);
-            default:
-              return Promise.reject(
-                new Error(
-                  `Unable to clone resource type ${r.metadata.resourceType}`
-                )
-              );
-          }
-        })
-      ).then((l) => {
-        l.forEach((p) => {
-          if (p.status === "rejected") {
-            enqueueSnackbar(`Adding resource: ${errorMessage(p.reason)}`, {
-              variant: "error",
-            });
-          }
+    (resources: ResourceDescription[], fields: Fields) =>
+      (fields.newOrExistingFolder === "new"
+        ? folderApi
+            .createFolder({
+              workspaceId: workspace.id,
+              createFolderRequestBody: {
+                displayName: fields.folderName,
+                description: fields.description,
+                parentFolderId: isRootFolder(fields.folderPath)
+                  ? undefined
+                  : fields.folderPath,
+              },
+            })
+            .then((folder) => folder.id)
+        : Promise.resolve(
+            isRootFolder(fields.folderPath) ? undefined : fields.folderPath
+          )
+      )
+        .then((folderId) =>
+          Promise.allSettled(
+            resources.map((r) => {
+              if (r.metadata.stewardshipType !== StewardshipType.Referenced) {
+                return Promise.reject(
+                  new Error(
+                    `Unable to clone resource stewardship ${r.metadata.stewardshipType}`
+                  )
+                );
+              }
+              const cloneProps = {
+                workspaceId: r.metadata.workspaceId || "",
+                resourceId: r.metadata.resourceId || "",
+                cloneReferencedResourceRequestBody: {
+                  destinationWorkspaceId: workspace.id,
+                  cloningInstructions: CloningInstructionsEnum.Reference,
+                },
+              };
+              const addToFolder = (r: {
+                resource?: { metadata: ResourceMetadata };
+              }) =>
+                folderId
+                  ? resourceApi.updateResourceProperties({
+                      workspaceId: workspace.id,
+                      resourceId: r.resource?.metadata.resourceId || "",
+                      property: [
+                        {
+                          key: ResourcePropertyNames.FolderId,
+                          value: folderId,
+                        },
+                      ],
+                    })
+                  : Promise.resolve();
+              switch (r.metadata.resourceType) {
+                case ResourceType.BigQueryDataset:
+                  return referencedGcpResourceApi
+                    .cloneGcpBigQueryDatasetReference(cloneProps)
+                    .then(addToFolder);
+                case ResourceType.BigQueryDataTable:
+                  return referencedGcpResourceApi
+                    .cloneGcpBigQueryDataTableReference(cloneProps)
+                    .then(addToFolder);
+                case ResourceType.GcsBucket:
+                  return referencedGcpResourceApi
+                    .cloneGcpGcsBucketReference(cloneProps)
+                    .then(addToFolder);
+                case ResourceType.GcsObject:
+                  return referencedGcpResourceApi
+                    .cloneGcpGcsObjectReference(cloneProps)
+                    .then(addToFolder);
+                case ResourceType.GitRepo:
+                  return referencedGcpResourceApi
+                    .cloneGitRepoReference(cloneProps)
+                    .then(addToFolder);
+                default:
+                  return Promise.reject(
+                    new Error(
+                      `Unable to clone resource type ${r.metadata.resourceType}`
+                    )
+                  );
+              }
+            })
+          )
+        )
+        .then((l) => {
+          l.forEach((p) => {
+            if (p.status === "rejected") {
+              enqueueSnackbar(`Adding resource: ${errorMessage(p.reason)}`, {
+                variant: "error",
+              });
+            }
+          });
           resourceListReload(workspace.id);
-        });
-      }),
+          folderListReload(workspace.id);
+        }),
     [
       enqueueSnackbar,
+      folderApi,
+      folderListReload,
       referencedGcpResourceApi,
+      resourceApi,
       resourceListReload,
       workspace.id,
     ]
