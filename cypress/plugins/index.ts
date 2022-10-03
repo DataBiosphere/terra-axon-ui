@@ -1,3 +1,4 @@
+import fetch from "node-fetch";
 import {
   getServiceAccountKey,
   getTestUserTokenFromKey,
@@ -16,6 +17,12 @@ export default async function plugins(
      */
     async accessToken() {
       return await getTestUserTokenFromKey(key);
+    },
+
+    async fakeHealthCheck() {
+      return await fetch("http://localhost:3002")
+        .then((resp) => resp.status === 200)
+        .catch(() => false);
     },
   });
   return config;

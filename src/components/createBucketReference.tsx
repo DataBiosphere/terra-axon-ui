@@ -5,6 +5,7 @@ import { Form } from "react-final-form";
 import * as Yup from "yup";
 import {
   CloningInstructionsEnum,
+  StewardshipType,
   WorkspaceDescription,
 } from "../generated/workspacemanager";
 import { useResourceAdded } from "./api/resourceList";
@@ -22,7 +23,7 @@ import { LoadingBackdrop } from "./loadingBackdrop";
 const schema = Yup.object({
   name: resourceNameField(),
   description: Yup.string(),
-  bucketName: bucketNameField(true),
+  bucketName: bucketNameField(StewardshipType.Referenced),
 });
 type Fields = Yup.InferType<typeof schema>;
 
@@ -74,7 +75,10 @@ export function useCreateBucketReference({
                 label="Description"
                 name="description"
               />
-              <BucketNameTextField required />
+              <BucketNameTextField
+                required
+                stewardship={StewardshipType.Referenced}
+              />
             </FlyoverContent>
             <FlyoverActions>
               <Button onClick={() => setOpen(false)}>Cancel</Button>

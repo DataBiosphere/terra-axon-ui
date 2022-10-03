@@ -79,6 +79,17 @@ app.get("/api/workspaces/alpha1/:workspaceId/jobs", async (req, res) =>
 app.get("/api/workspaces/v1/:workspaceId/resources", (req, res) =>
   invokeApi(res, apis.resourceApi.enumerateResources(req.params))
 );
+app.post(
+  "/api/workspaces/v1/:workspaceId/resources/:resourceId/properties",
+  (req, res) =>
+    invokeApi(
+      res,
+      apis.resourceApi.updateResourceProperties({
+        ...req.params,
+        property: req.body,
+      })
+    )
+);
 app.post("/api/workspaces/v1/:workspaceId/cloudcontexts", (req, res) =>
   invokeApi(
     res,
@@ -122,6 +133,40 @@ app.patch(
       apis.controlledGcpResourceApi.updateGcsBucket({
         ...req.params,
         updateControlledGcpGcsBucketRequestBody: req.body,
+      })
+    )
+);
+app.post(
+  "/api/workspaces/v1/:workspaceId/resources/controlled/gcp/buckets/generateName",
+  (req, res) =>
+    invokeApi(
+      res,
+      apis.controlledGcpResourceApi.generateGcpGcsBucketCloudName({
+        ...req.params,
+        generateGcpGcsBucketCloudNameRequestBody: req.body,
+      })
+    )
+);
+
+app.post(
+  "/api/workspaces/v1/:workspaceId/resources/controlled/gcp/bqdatasets",
+  (req, res) =>
+    invokeApi(
+      res,
+      apis.controlledGcpResourceApi.createBigQueryDataset({
+        ...req.params,
+        createControlledGcpBigQueryDatasetRequestBody: req.body,
+      })
+    )
+);
+app.patch(
+  "/api/workspaces/v1/:workspaceId/resources/controlled/gcp/bqdatasets/:resourceId",
+  (req, res) =>
+    invokeApi(
+      res,
+      apis.controlledGcpResourceApi.updateBigQueryDataset({
+        ...req.params,
+        updateControlledGcpBigQueryDatasetRequestBody: req.body,
       })
     )
 );
@@ -182,6 +227,27 @@ app.post(
     )
 );
 app.post(
+  "/api/workspaces/v1/:workspaceId/resources/referenced/gcp/bucket/objects/:resourceId",
+  (req, res) =>
+    invokeApi(
+      res,
+      apis.referencedGcpResourceApi.updateBucketObjectReferenceResource({
+        ...req.params,
+        updateGcsBucketObjectReferenceRequestBody: req.body,
+      })
+    )
+);
+app.get(
+  "/api/workspaces/v1/:workspaceId/resources/referenced/gcp/bucket/objects/:resourceId",
+  (req, res) =>
+    invokeApi(
+      res,
+      apis.referencedGcpResourceApi.getGcsObjectReference({
+        ...req.params,
+      })
+    )
+);
+app.post(
   "/api/workspaces/v1/:workspaceId/resources/referenced/gcp/bucket/objects/:resourceId/clone",
   (req, res) =>
     invokeApi(
@@ -205,6 +271,27 @@ app.post(
     )
 );
 app.post(
+  "/api/workspaces/v1/:workspaceId/resources/referenced/gcp/bigquerydatasets/:resourceId",
+  (req, res) =>
+    invokeApi(
+      res,
+      apis.referencedGcpResourceApi.updateBigQueryDatasetReferenceResource({
+        ...req.params,
+        updateBigQueryDatasetReferenceRequestBody: req.body,
+      })
+    )
+);
+app.get(
+  "/api/workspaces/v1/:workspaceId/resources/referenced/gcp/bigquerydatasets/:resourceId",
+  (req, res) =>
+    invokeApi(
+      res,
+      apis.referencedGcpResourceApi.getBigQueryDatasetReference({
+        ...req.params,
+      })
+    )
+);
+app.post(
   "/api/workspaces/v1/:workspaceId/resources/referenced/gcp/bigquerydatasets/:resourceId/clone",
   (req, res) =>
     invokeApi(
@@ -224,6 +311,27 @@ app.post(
       apis.referencedGcpResourceApi.createBigQueryDataTableReference({
         ...req.params,
         createGcpBigQueryDataTableReferenceRequestBody: req.body,
+      })
+    )
+);
+app.post(
+  "/api/workspaces/v1/:workspaceId/resources/referenced/gcp/bigquerydatatables/:resourceId",
+  (req, res) =>
+    invokeApi(
+      res,
+      apis.referencedGcpResourceApi.updateBigQueryDataTableReferenceResource({
+        ...req.params,
+        updateBigQueryDataTableReferenceRequestBody: req.body,
+      })
+    )
+);
+app.get(
+  "/api/workspaces/v1/:workspaceId/resources/referenced/gcp/bigquerydatatables/:resourceId",
+  (req, res) =>
+    invokeApi(
+      res,
+      apis.referencedGcpResourceApi.getBigQueryDataTableReference({
+        ...req.params,
       })
     )
 );
@@ -259,6 +367,18 @@ app.post(
         cloneReferencedResourceRequestBody: req.body,
       })
     )
+);
+app.post("/api/workspaces/v1/:workspaceId/folders", (req, res) =>
+  invokeApi(
+    res,
+    apis.folderApi.createFolder({
+      ...req.params,
+      createFolderRequestBody: req.body,
+    })
+  )
+);
+app.get("/api/workspaces/v1/:workspaceId/folders", (req, res) =>
+  invokeApi(res, apis.folderApi.listFolders({ ...req.params }))
 );
 
 app.get("/api/resources/v2/:resourceTypeName/:resourceId/roles", (req, res) =>

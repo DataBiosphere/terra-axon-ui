@@ -110,7 +110,7 @@ function key(workspaceUserFacingId: string) {
 
 const workspacesKey = "/api/workspaces";
 
-function isDataCollection(ws: WorkspaceDescription) {
+export function isDataCollection(ws: WorkspaceDescription) {
   return ws.properties?.find(
     (p) => p.key == "terra-type" && p.value == "data-collection"
   );

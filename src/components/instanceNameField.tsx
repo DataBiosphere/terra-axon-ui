@@ -47,6 +47,7 @@ export function AutoInstanceNameTextField({
       field="instanceName"
       generateId={generateId}
       Component={InstanceNameTextField}
+      componentProps={{}}
     />
   );
 }

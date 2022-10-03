@@ -27,13 +27,19 @@ import {
   GcpGcsBucketResource,
   GcpGcsObjectAttributes,
   GcpGcsObjectResource,
+  GetBigQueryDatasetReferenceRequest,
+  GetBigQueryDataTableReferenceRequest,
   GetBucketReferenceRequest,
+  GetGcsObjectReferenceRequest,
   GitRepoAttributes,
   GitRepoResource,
   ReferencedGcpResourceApi,
   ResourceDescription,
   ResourceType,
   StewardshipType,
+  UpdateBigQueryDatasetReferenceResourceRequest,
+  UpdateBigQueryDataTableReferenceResourceRequest,
+  UpdateBucketObjectReferenceResourceRequest,
   UpdateBucketReferenceResourceRequest,
 } from "../../../generated/workspacemanager";
 import { FakeResourceApi } from "./resource";
@@ -129,6 +135,49 @@ export class FakeReferencedGcpResourceApi extends ReferencedGcpResourceApi {
     return Promise.resolve(resourceToObject(resource));
   }
 
+  async updateBucketObjectReferenceResource(
+    request: UpdateBucketObjectReferenceResourceRequest
+  ): Promise<void> {
+    const originalResource = this.resourceApi.getResource(
+      request.resourceId,
+      request.workspaceId
+    );
+
+    this.resourceApi.updateResource(request.resourceId, request.workspaceId, {
+      metadata: {
+        ...originalResource.metadata,
+        name:
+          request.updateGcsBucketObjectReferenceRequestBody.name ||
+          originalResource.metadata.name,
+        description:
+          request.updateGcsBucketObjectReferenceRequestBody.description ||
+          originalResource.metadata.description,
+      },
+      resourceAttributes: {
+        gcpGcsObject: {
+          bucketName:
+            request.updateGcsBucketObjectReferenceRequestBody.bucketName ||
+            originalResource.resourceAttributes.gcpGcsBucket?.bucketName ||
+            "",
+          fileName:
+            request.updateGcsBucketObjectReferenceRequestBody.objectName ||
+            originalResource.resourceAttributes.gcpGcsObject?.fileName ||
+            "",
+        },
+      },
+    });
+  }
+
+  async getGcsObjectReference(
+    request: GetGcsObjectReferenceRequest
+  ): Promise<GcpGcsObjectResource> {
+    const resource = this.resourceApi.getResource(
+      request.resourceId,
+      request.workspaceId
+    );
+    return Promise.resolve(resourceToObject(resource));
+  }
+
   async cloneGcpGcsObjectReference(
     request: CloneGcpGcsObjectReferenceRequest
   ): Promise<CloneReferencedGcpGcsObjectResourceResult> {
@@ -157,6 +206,49 @@ export class FakeReferencedGcpResourceApi extends ReferencedGcpResourceApi {
     return Promise.resolve(resourceToDataset(resource));
   }
 
+  async updateBigQueryDatasetReferenceResource(
+    request: UpdateBigQueryDatasetReferenceResourceRequest
+  ): Promise<void> {
+    const originalResource = this.resourceApi.getResource(
+      request.resourceId,
+      request.workspaceId
+    );
+
+    this.resourceApi.updateResource(request.resourceId, request.workspaceId, {
+      metadata: {
+        ...originalResource.metadata,
+        name:
+          request.updateBigQueryDatasetReferenceRequestBody.name ||
+          originalResource.metadata.name,
+        description:
+          request.updateBigQueryDatasetReferenceRequestBody.description ||
+          originalResource.metadata.description,
+      },
+      resourceAttributes: {
+        gcpBqDataset: {
+          datasetId:
+            request.updateBigQueryDatasetReferenceRequestBody.datasetId ||
+            originalResource.resourceAttributes.gcpBqDataset?.datasetId ||
+            "",
+          projectId:
+            request.updateBigQueryDatasetReferenceRequestBody.projectId ||
+            originalResource.resourceAttributes.gcpBqDataset?.projectId ||
+            "",
+        },
+      },
+    });
+  }
+
+  async getBigQueryDatasetReference(
+    request: GetBigQueryDatasetReferenceRequest
+  ): Promise<GcpBigQueryDatasetResource> {
+    const resource = this.resourceApi.getResource(
+      request.resourceId,
+      request.workspaceId
+    );
+    return Promise.resolve(resourceToDataset(resource));
+  }
+
   async cloneGcpBigQueryDatasetReference(
     request: CloneGcpBigQueryDatasetReferenceRequest
   ): Promise<CloneReferencedGcpBigQueryDatasetResourceResult> {
@@ -182,6 +274,53 @@ export class FakeReferencedGcpResourceApi extends ReferencedGcpResourceApi {
         },
       },
     });
+    return Promise.resolve(resourceToDataTable(resource));
+  }
+
+  async updateBigQueryDataTableReferenceResource(
+    request: UpdateBigQueryDataTableReferenceResourceRequest
+  ): Promise<void> {
+    const originalResource = this.resourceApi.getResource(
+      request.resourceId,
+      request.workspaceId
+    );
+
+    this.resourceApi.updateResource(request.resourceId, request.workspaceId, {
+      metadata: {
+        ...originalResource.metadata,
+        name:
+          request.updateBigQueryDataTableReferenceRequestBody.name ||
+          originalResource.metadata.name,
+        description:
+          request.updateBigQueryDataTableReferenceRequestBody.description ||
+          originalResource.metadata.description,
+      },
+      resourceAttributes: {
+        gcpBqDataTable: {
+          datasetId:
+            request.updateBigQueryDataTableReferenceRequestBody.datasetId ||
+            originalResource.resourceAttributes.gcpBqDataset?.datasetId ||
+            "",
+          projectId:
+            request.updateBigQueryDataTableReferenceRequestBody.projectId ||
+            originalResource.resourceAttributes.gcpBqDataset?.projectId ||
+            "",
+          dataTableId:
+            request.updateBigQueryDataTableReferenceRequestBody.dataTableId ||
+            originalResource.resourceAttributes.gcpBqDataTable?.dataTableId ||
+            "",
+        },
+      },
+    });
+  }
+
+  async getBigQueryDataTableReference(
+    request: GetBigQueryDataTableReferenceRequest
+  ): Promise<GcpBigQueryDataTableResource> {
+    const resource = this.resourceApi.getResource(
+      request.resourceId,
+      request.workspaceId
+    );
     return Promise.resolve(resourceToDataTable(resource));
   }
 
@@ -268,6 +407,13 @@ export class FakeReferencedGcpResourceApi extends ReferencedGcpResourceApi {
         ...source.metadata,
         workspaceId:
           request.cloneReferencedResourceRequestBody.destinationWorkspaceId,
+        resourceLineage: [
+          ...(source.metadata.resourceLineage || []),
+          {
+            sourceWorkspaceId: request.workspaceId,
+            sourceResourceId: request.resourceId,
+          },
+        ],
       },
       resourceAttributes: { ...source.resourceAttributes },
     });

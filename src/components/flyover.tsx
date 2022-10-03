@@ -5,6 +5,7 @@ import {
   Drawer,
   Icon,
   IconButton,
+  Typography,
 } from "@mui/material";
 import { PopupState } from "material-ui-popup-state/hooks";
 import { ReactElement, ReactNode, useState } from "react";
@@ -21,6 +22,7 @@ export function Flyover({
   onClose,
   size = "regular",
   title,
+  subtitle,
   avatar,
   children,
 }: FlyoverProps): ReactElement {
@@ -42,6 +44,7 @@ export function Flyover({
             {avatar}
             {title}
           </Box>
+          <Typography sx={{ color: "text.secondary" }}>{subtitle}</Typography>
         </DialogTitle>
         <IconButton onClick={onClose} sx={{ alignSelf: "flex-start" }}>
           <Icon>close</Icon>
@@ -55,6 +58,7 @@ export function Flyover({
 export interface UseFlyoverProps {
   size?: "regular" | "large";
   title?: string;
+  subtitle?: string;
   avatar?: ReactNode;
   children: ReactNode;
 }

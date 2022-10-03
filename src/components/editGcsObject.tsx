@@ -6,12 +6,14 @@ import { Form } from "react-final-form";
 import * as Yup from "yup";
 import {
   ResourceDescription,
-  StewardshipType,
   WorkspaceDescription,
 } from "../generated/workspacemanager";
 import { useResourceUpdated } from "./api/resourceList";
 import { useApi } from "./apiProvider";
-import { bucketNameField, BucketNameTextField } from "./bucketNameField";
+import {
+  bucketObjectNameField,
+  parseObjectBucket,
+} from "./cloudStorageObjectField";
 import { ErrorList } from "./errorhandler";
 import {
   resourceNameField,
@@ -30,34 +32,34 @@ import { LoadingBackdrop } from "./loadingBackdrop";
 const schema = Yup.object({
   name: resourceNameField(),
   description: Yup.string(),
-  bucketName: bucketNameField(StewardshipType.Referenced),
+  bucketObjectName: bucketObjectNameField(),
 });
 type Fields = Yup.InferType<typeof schema>;
 
-export function useEditGcsBucketState(resource: ResourceDescription) {
+export function useEditGcsObjectState(resource: ResourceDescription) {
   return usePopupState({
     variant: "dialog",
-    popupId: `edit-bucket-${resource.metadata.resourceId}`,
+    popupId: `edit-object-${resource.metadata.resourceId}`,
   });
 }
 
-export interface EditGcsBucketProps extends Omit<FlyoverProps, "children"> {
+export interface EditGcsObjectProps extends Omit<FlyoverProps, "children"> {
   workspace: WorkspaceDescription;
   resource: ResourceDescription;
 }
 
-export function EditGcsBucket({
+export function EditGcsObject({
   workspace,
   resource,
   ...flyoverProps
-}: EditGcsBucketProps) {
-  const editGcsBucketAction = useEditGcsBucketAction(workspace, resource);
+}: EditGcsObjectProps) {
+  const editGcsObjectAction = useEditGcsObjectAction(workspace, resource);
 
   return (
-    <Flyover title="Edit the cloud storage bucket" {...flyoverProps}>
+    <Flyover title="Edit the cloud storage object" {...flyoverProps}>
       <Form
         onSubmit={(values: Fields) =>
-          editGcsBucketAction(values).then(
+          editGcsObjectAction(values).then(
             () => flyoverProps.onClose(),
             toFinalFormError
           )
@@ -65,8 +67,7 @@ export function EditGcsBucket({
         initialValues={{
           name: resource.metadata.name || "",
           description: resource.metadata.description || "",
-          bucketName:
-            resource.resourceAttributes.gcpGcsBucket?.bucketName || "",
+          bucketObjectName: `gs://${resource.resourceAttributes.gcpGcsObject?.bucketName}/${resource.resourceAttributes.gcpGcsObject?.fileName}`,
         }}
         validate={(values: Fields) => validateFields(schema, values)}
         render={({
@@ -93,12 +94,11 @@ export function EditGcsBucket({
                 name="description"
                 label="Description"
               />
-              <BucketNameTextField
-                stewardship={StewardshipType.Referenced}
-                disabled={
-                  resource.metadata.stewardshipType ==
-                  StewardshipType.Controlled
-                }
+              <TextField
+                fullWidth
+                margin="dense"
+                name="bucketObjectName"
+                label="Cloud object URL"
               />
             </FlyoverContent>
             <FlyoverActions>
@@ -118,58 +118,45 @@ export function EditGcsBucket({
   );
 }
 
-function useEditGcsBucketAction(
+function useEditGcsObjectAction(
   workspace: WorkspaceDescription,
   resource: ResourceDescription
 ) {
-  const { controlledGcpResourceApi, referencedGcpResourceApi } = useApi();
+  const { referencedGcpResourceApi } = useApi();
   const resourceUpdated = useResourceUpdated();
   return useCallback(
-    async (fields: Fields) =>
-      resource.metadata.stewardshipType == StewardshipType.Controlled
-        ? controlledGcpResourceApi
-            .updateGcsBucket({
-              workspaceId: workspace.id,
-              resourceId: resource.metadata.resourceId,
-              updateControlledGcpGcsBucketRequestBody: {
-                name: fields.name,
-                description: fields.description,
-              },
-            })
-            .then((b) =>
-              resourceUpdated({
-                metadata: b.metadata,
-                resourceAttributes: { gcpGcsBucket: b.attributes },
-              })
-            )
-        : referencedGcpResourceApi
-            .updateBucketReferenceResource({
-              workspaceId: workspace.id,
-              resourceId: resource.metadata.resourceId,
-              updateGcsBucketReferenceRequestBody: {
-                name: fields.name,
-                description: fields.description,
-                bucketName: fields.bucketName,
-              },
-            })
-            .then(() =>
-              // TODO: Use response rather than fetching manually [PF-1987]
-              referencedGcpResourceApi.getBucketReference({
-                resourceId: resource.metadata.resourceId,
-                workspaceId: workspace.id,
-              })
-            )
-            .then((b) =>
-              resourceUpdated({
-                metadata: b.metadata,
-                resourceAttributes: { gcpGcsBucket: b.attributes },
-              })
-            ),
+    async (fields: Fields) => {
+      const { bucketName, objectName } = parseObjectBucket(
+        fields.bucketObjectName
+      );
+      return referencedGcpResourceApi
+        .updateBucketObjectReferenceResource({
+          workspaceId: workspace.id,
+          resourceId: resource.metadata.resourceId,
+          updateGcsBucketObjectReferenceRequestBody: {
+            name: fields.name,
+            description: fields.description,
+            bucketName: bucketName,
+            objectName: objectName,
+          },
+        })
+        .then(() =>
+          // TODO: Use response rather than fetching manually [PF-1987]
+          referencedGcpResourceApi.getGcsObjectReference({
+            resourceId: resource.metadata.resourceId,
+            workspaceId: workspace.id,
+          })
+        )
+        .then((b) =>
+          resourceUpdated({
+            metadata: b.metadata,
+            resourceAttributes: { gcpGcsObject: b.attributes },
+          })
+        );
+    },
     [
-      controlledGcpResourceApi,
       referencedGcpResourceApi,
       resource.metadata.resourceId,
-      resource.metadata.stewardshipType,
       workspace.id,
       resourceUpdated,
     ]

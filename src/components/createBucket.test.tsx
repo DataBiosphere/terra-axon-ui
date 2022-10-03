@@ -57,7 +57,7 @@ describe("create bucket", () => {
     fireEvent.change(
       screen.getByRole("textbox", { name: "Cloud bucket name" }),
       {
-        target: { value: "test_bucket_name" },
+        target: { value: "test-bucket-name" },
       }
     );
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
@@ -77,7 +77,7 @@ describe("create bucket", () => {
       }),
       resourceAttributes: {
         gcpGcsBucket: {
-          bucketName: "test_bucket_name",
+          bucketName: "test-bucket-name",
         },
       },
     };
@@ -93,7 +93,7 @@ describe("create bucket", () => {
     [
       "Cloud bucket name",
       "with spaces",
-      "Only use lowercase letters, numbers, underscores and dashes",
+      "Only use lowercase letters, numbers and dashes",
     ],
   ])(
     "has invalid field %s value %s",

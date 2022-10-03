@@ -22,7 +22,10 @@ import {
 } from "../generated/workspacemanager";
 import { CloudNotebooksClient } from "../lib/cloud/notebooks";
 import { apiFakes } from "../testing/api/fakes";
-import { createTestWorkspace } from "../testing/api/helper";
+import {
+  createTestDataCollection,
+  createTestWorkspace,
+} from "../testing/api/helper";
 import { FakeApiProvider } from "../testing/api/provider";
 import { TestAuth } from "../testing/auth";
 import { TestProfile } from "../testing/profile";
@@ -135,8 +138,9 @@ describe("workspace page", () => {
       </SnackbarProvider>
     );
     await waitForElementToBeRemoved(() => screen.queryByRole("progressbar"));
-
     fireEvent.click(screen.getByRole("tab", { name: "Resources" }));
+
+    await waitForElementToBeRemoved(() => screen.queryByRole("progressbar"));
     screen.getByText("Every analysis begins with your resources");
 
     await controlledGcpResourceApi.createBucket({
@@ -159,6 +163,128 @@ describe("workspace page", () => {
 
     await screen.findByText("test-resource-name");
     screen.getByLabelText("Cloud Storage bucket");
+  });
+
+  // TODO: Currently using findByText
+  // Should replace with findByRole once themeing is worked out
+  // And SectionHeader uses appropriate variants
+  it("renders resource section header", async () => {
+    const apis = apiFakes();
+    const { controlledGcpResourceApi, referencedGcpResourceApi } = apis;
+    const workspace = await createTestWorkspace(apis);
+    const dataCollection = await createTestDataCollection(apis);
+    const dataCollection2 = await createTestDataCollection(apis);
+
+    render(
+      <SnackbarProvider>
+        <MemoryRouter initialEntries={["/workspaces/test-ufid"]}>
+          <Route exact path="/workspaces/:workspaceUserFacingId">
+            <FakeApiProvider apis={apis}>
+              <WorkspacePage />
+            </FakeApiProvider>
+          </Route>
+        </MemoryRouter>
+      </SnackbarProvider>
+    );
+    await waitForElementToBeRemoved(() => screen.queryByRole("progressbar"));
+    fireEvent.click(screen.getByRole("tab", { name: "Resources" }));
+
+    await waitForElementToBeRemoved(() => screen.queryByRole("progressbar"));
+    // Check ResourceCard subheader
+    await screen.findByText("0 resources");
+    await controlledGcpResourceApi.createBucket({
+      workspaceId: workspace.id,
+      createControlledGcpGcsBucketRequestBody: {
+        common: {
+          name: "test-resource-name",
+          cloningInstructions: CloningInstructionsEnum.Nothing,
+          accessScope: AccessScope.SharedAccess,
+          managedBy: ManagedBy.User,
+        },
+        gcsBucket: {
+          name: "test-bucket-name",
+          location: "test-location",
+        },
+      },
+    });
+    fireEvent.click(screen.getByText("test-add-button"));
+    await screen.findByText("1 resource");
+
+    await controlledGcpResourceApi.createBucket({
+      workspaceId: workspace.id,
+      createControlledGcpGcsBucketRequestBody: {
+        common: {
+          name: "test-resource-name2",
+          cloningInstructions: CloningInstructionsEnum.Nothing,
+          accessScope: AccessScope.SharedAccess,
+          managedBy: ManagedBy.User,
+        },
+        gcsBucket: {
+          name: "test-bucket-name2",
+          location: "test-location",
+        },
+      },
+    });
+    fireEvent.click(screen.getByText("test-add-button"));
+    await screen.findByText("2 resources");
+
+    const bucketToClone = await controlledGcpResourceApi.createBucket({
+      workspaceId: dataCollection.id,
+      createControlledGcpGcsBucketRequestBody: {
+        common: {
+          name: "test-resource-name3",
+          cloningInstructions: CloningInstructionsEnum.Nothing,
+          accessScope: AccessScope.SharedAccess,
+          managedBy: ManagedBy.User,
+        },
+        gcsBucket: {
+          name: "test-bucket-name3",
+          location: "test-location",
+        },
+      },
+    });
+
+    await referencedGcpResourceApi.cloneGcpGcsBucketReference({
+      workspaceId: dataCollection.id,
+      resourceId: bucketToClone.resourceId,
+      cloneReferencedResourceRequestBody: {
+        cloningInstructions: CloningInstructionsEnum.Reference,
+        destinationWorkspaceId: workspace.id,
+      },
+    });
+    fireEvent.click(screen.getByText("test-add-button"));
+    await screen.findByText("test-resource-name3");
+    await screen.findByText("3 resources • 1 resource from");
+    await screen.findByText("1 data collection");
+
+    const bucketToClone2 = await controlledGcpResourceApi.createBucket({
+      workspaceId: dataCollection2.id,
+      createControlledGcpGcsBucketRequestBody: {
+        common: {
+          name: "test-resource-name4",
+          cloningInstructions: CloningInstructionsEnum.Nothing,
+          accessScope: AccessScope.SharedAccess,
+          managedBy: ManagedBy.User,
+        },
+        gcsBucket: {
+          name: "test-bucket-name4",
+          location: "test-location",
+        },
+      },
+    });
+
+    await referencedGcpResourceApi.cloneGcpGcsBucketReference({
+      workspaceId: dataCollection2.id,
+      resourceId: bucketToClone2.resourceId,
+      cloneReferencedResourceRequestBody: {
+        cloningInstructions: CloningInstructionsEnum.Reference,
+        destinationWorkspaceId: workspace.id,
+      },
+    });
+    fireEvent.click(screen.getByText("test-add-button"));
+    await screen.findByText("test-resource-name4");
+    await screen.findByText("4 resources • 2 resources from");
+    await screen.findByText("2 data collections");
   });
 
   it("renders notebook gcp state", async () => {

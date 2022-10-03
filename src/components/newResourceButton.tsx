@@ -1,4 +1,4 @@
-import { Button, Icon, Menu, MenuItem } from "@mui/material";
+import { Button, Divider, Icon, Menu, MenuItem } from "@mui/material";
 import {
   bindMenu,
   bindTrigger,
@@ -8,6 +8,8 @@ import { ReactElement } from "react";
 import { WorkspaceDescription } from "../generated/workspacemanager";
 import { useCreateBigQueryDataset } from "./createBigQueryDataset";
 import { useCreateBucket } from "./createBucket";
+import { CreateFolder, useCreateFolder } from "./createFolder";
+import { bindFlyover } from "./flyover";
 
 interface NewResourceButtonProps {
   workspace: WorkspaceDescription;
@@ -23,6 +25,7 @@ export function NewResourceButton({
     useCreateBigQueryDataset({
       workspace: workspace,
     });
+  const createFolder = useCreateFolder();
 
   const menuState = usePopupState({
     variant: "popover",
@@ -39,11 +42,14 @@ export function NewResourceButton({
         New
       </Button>
       <Menu onClick={menuState.close} {...bindMenu(menuState)}>
+        <MenuItem {...bindTrigger(createFolder)}>Folder</MenuItem>
+        <Divider />
         <MenuItem onClick={showBucket}>Cloud Storage bucket</MenuItem>
         <MenuItem onClick={showBigQueryDataset}>BigQuery dataset</MenuItem>
       </Menu>
       {createBucket}
       {createBigQueryDataset}
+      <CreateFolder workspace={workspace} {...bindFlyover(createFolder)} />
     </div>
   );
 }

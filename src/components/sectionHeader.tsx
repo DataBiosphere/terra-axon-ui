@@ -3,28 +3,34 @@ import { ReactElement, ReactNode } from "react";
 
 export interface SectionHeaderProps {
   primary?: string;
+  secondary?: string | ReactNode;
   actions?: ReactNode;
-  color?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
 }
 
 export function SectionHeader({
   primary,
+  secondary,
   actions,
-  color = "text.main",
+  primaryColor = "text.primary",
+  secondaryColor = "text.secondary",
 }: SectionHeaderProps): ReactElement {
   return (
     <Box display="flex" alignItems="flex-start">
-      <Box flexGrow={1} pt={3}>
+      <Box sx={{ flexGrow: 1, ml: 1, mb: -1 }}>
         {primary && (
-          <Typography
-            variant="sectionHeader"
-            sx={{ ml: 2, mb: -1, color: color }}
-          >
+          // TODO: Remove sectionHeader variant once theming is worked out
+          <Typography variant="sectionHeader" sx={{ color: primaryColor }}>
             {primary}
           </Typography>
         )}
+        {secondary && (
+          // TODO: Add variant once theming is worked out. I.E. potentially subtitle1
+          <Typography sx={{ color: secondaryColor }}>{secondary}</Typography>
+        )}
       </Box>
-      <Box sx={{ pt: 2 }}>{actions}</Box>
+      <Box>{actions}</Box>
     </Box>
   );
 }

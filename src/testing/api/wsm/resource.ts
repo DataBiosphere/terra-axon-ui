@@ -4,6 +4,7 @@ import {
   ResourceApi,
   ResourceDescription,
   ResourceList,
+  UpdateResourcePropertiesRequest,
 } from "../../../generated/workspacemanager";
 import { apiError } from "../error";
 import { FakeWorkspaceApi } from "./workspaceApi";
@@ -90,5 +91,23 @@ export class FakeResourceApi extends ResourceApi {
       (r) => r.metadata?.workspaceId === request.workspaceId
     );
     return Promise.resolve({ resources: resources });
+  }
+
+  async updateResourceProperties(
+    request: UpdateResourcePropertiesRequest
+  ): Promise<void> {
+    const resource = this.getResource(request.resourceId, request.workspaceId);
+    if (!resource.metadata.properties) {
+      resource.metadata.properties = [];
+    }
+    const props = resource.metadata.properties;
+    request.property.forEach((newProp) => {
+      const prop = props?.find((p) => p.key == newProp.key);
+      if (prop) {
+        prop.value = newProp.value;
+      } else {
+        props.push(newProp);
+      }
+    });
   }
 }

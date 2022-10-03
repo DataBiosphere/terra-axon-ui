@@ -118,6 +118,7 @@ export const theme = createTheme({
     },
     text: {
       primary: "#474747",
+      secondary: "#757575",
     },
     action: {
       selected: "#34A853",
