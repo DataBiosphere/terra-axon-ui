@@ -415,6 +415,7 @@ function ResourcesStep({
             "Data Policies": dataCollection?.policies?.length || 0,
             Access: (
               <RoleAccess
+                verbose
                 iamRole={dataCollection?.highestRole || IamRole.Discoverer}
               />
             ),
@@ -654,13 +655,19 @@ function ReviewStep({ dataCollection, workspace, resources }: StepProps) {
   );
 }
 
-function RoleAccess({ iamRole }: { iamRole: IamRole }) {
+function RoleAccess({
+  iamRole,
+  verbose,
+}: {
+  iamRole: IamRole;
+  verbose?: boolean;
+}) {
   return (
     <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
       {iamRole === IamRole.Discoverer && (
         <>
           <Icon color="error">error</Icon>
-          Request access
+          Access required
         </>
       )}
       {roleContains(iamRole, IamRole.Reader) && (
@@ -668,7 +675,7 @@ function RoleAccess({ iamRole }: { iamRole: IamRole }) {
           <Tooltip title={iamRole.charAt(0) + iamRole.slice(1).toLowerCase()}>
             <Icon color="success">check_circle</Icon>
           </Tooltip>
-          Granted
+          {verbose && <>Granted</>}
         </>
       )}
     </Box>
